@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Dates in `YYYY-M
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-05-25
+
+### Changed
+- Dashboard signature row: fixed UTF-8 triple-mojibake on the middle-dot separator. The `SignaturePlatforms` widget now renders cleanly as `github  ·  instagram` instead of the corrupted `github  Ã‚Â·  instagram` produced by an earlier Dash Studio save cycle.
+- Dashboard INPUTS panel labels renamed: `BRAKE` → `BRAKE PRESSURE`, `THROTTLE` → `THROTTLE POSITION` (matches the F1 international-feed convention).
+
+### Added
+- Hero screenshot of the live dashboard at `docs/screenshots/GSIFPEV2.png` (HAMILTON on Ferrari, INPUTS panel mid-session). Referenced from `README.md` and `DASHBOARD.md`.
+
 ## [1.0.0] — 2026-05-25
 
 ### Added — first release
@@ -42,7 +51,7 @@ wheel screen and has been validated on the GSI Formula Pro Elite V2 and GSI Hype
 - **Driver-name title renders in the live F1 team colour** — when the plugin is `Connected` and the upstream `TeamColour` resolves, the title paints in the broadcast-accurate hex (Ferrari `#E80020`, Mercedes `#27F4D2`, Red Bull `#3671C6`, etc.) so the wheel matches the on-screen TV graphic. Falls back to green on connect, red-orange on connecting, amber on disconnect.
 - Left-side broadcast pills for car ahead (INT) and leader (LDR) with car numbers.
 - LAST / GAP cluster, sector splits with personal-best (green) and overall-best (purple) flags.
-- **INPUTS panel** — live throttle (white) and brake (yellow) bar charts driven by `F1SimHubLivePlugin.Throttle` and `F1SimHubLivePlugin.Brake`, rolling 100-point history.
+- **INPUTS panel** — live throttle (white) and brake (yellow) bar charts driven by `F1SimHubLivePlugin.Throttle` and `F1SimHubLivePlugin.Brake`, labelled `BRAKE PRESSURE` and `THROTTLE POSITION`, rolling 100-point history.
 - Flag/Caution indicator driven by `TrackStatusCode` (YELLOW / SC / VSC / RED).
 - `@vicslive` signature widget.
 

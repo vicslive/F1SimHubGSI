@@ -2,6 +2,8 @@
 
 **SimHub plugin + custom Dash Studio dashboard that pipes live Formula 1 telemetry from F1's broadcast feed (or MultiViewer replay) onto a SimHub-connected wheel screen.**
 
+![F1RaceSim_GSIFPEV2 dashboard live during a race — HAMILTON in Ferrari red, INPUTS panel active](docs/screenshots/GSIFPEV2.png)
+
 The current ``F1RaceSim_GSIFPEV2`` dashboard is laid out for an 800×480 wheel screen and has been validated on the [GSI Formula Pro Elite V2](https://gomezsimindustries.com/products/formula-pro-elite-v2) and [GSI Hyper P1](https://gomezsimindustries.com/products/hyper-p1). Any other SimHub-LCD-capable wheel at the same resolution should also work; resolutions other than 800×480 will crop or scale.
 
 You pick a driver number (`44` = Hamilton, `1` = Verstappen, `16` = Leclerc, …). The plugin pulls that driver's RPM, gear, speed, throttle, brake, DRS, lap time, sector splits, gap to leader, tyre compound, pit stops, weather, track status and race-control flags. The companion `F1RaceSim_GSIFPEV2` dashboard renders all of it as a broadcast-style dash with shift lights driven by the live RPM.
@@ -311,52 +313,84 @@ Populated once per session as soon as the upstream `DriverList` is fetched. Empt
 
 `F1RaceSim_GSIFPEV2` is a custom Dash Studio template that ships in `dashboards/F1RaceSim_GSIFPEV2.djson`. It mimics the F1 TV broadcast graphic layout, scaled for the GSI wheel's 800×480 screen.
 
-### Layout (top-to-bottom, left-to-right)
+![F1RaceSim_GSIFPEV2 dashboard live during a race — HAMILTON in Ferrari red, INPUTS panel active, sector splits coloured](docs/screenshots/GSIFPEV2.png)
+
+### Layout
+
+The screen is laid out as a 3-column broadcast grid: **left = timing column**, **center = telemetry column**, **right = pace column**, plus a top status strip and a bottom data strip.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ [▲ Flag indicator] [Lap M/N] [Position]   [Driver #] [Pos] │  top strip
-│  YELLOW/SC/VSC                                                │
-├──────────────────────────────────────────────────────────────┤
-│        Throttle / brake bars                                  │
-│        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━      │
-│        @vicslive                                              │
-│        github · instagram                                     │
-├──────────────────────────────────────────────────────────────┤
-│ [INT car #] AheadSect1/2/3            LAST   1:23.456        │
-│ [LDR car #] LeaderSect1/2/3           GAP    +12.345         │
-├──────────────────────────────────────────────────────────────┤
-│ [TYRE] [STOPS] [TOP SPEED] [OVERTAKE] [F1Flag]                │  bottom strip
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│ ☀ 19/33          HAMILTON          🕐 16:14    ⏳ 1:31:19          │  TOP STRIP
+│  AirT/TrkT      (driver name,      session     session time         │
+│   °C            in team color)     clock       remaining            │
+├────────────────────────────────────────────────────────────────────┤
+│ [12 INT]                              ┌────────┐                    │
+│        +2.757                         │  303   │  LAP 19/53 POS 4/22│
+│ 34.399  41.758  17.938                │ SPEED  │                    │
+│   S1     S2      S3                   │        │  INPUTS            │
+│                                       │  🚗    │  BRAKE PRESSURE    │
+│ 34.919  41.921  18.119                │        │  ━━━━━━━━━━━━━━━   │
+│   ←  own driver, color-coded          │   8    │  THROTTLE POSITION │
+│       (purple=overall, green=PB,      │ GEAR   │  ━━━━━━━━━━━━━━━   │
+│        yellow=other)                  │        │                    │
+│                                       │ 10580  │  @vicslive         │
+│ 34.720  42.014  18.054                │  RPM   │  github · instagram│
+│  ←  leader's reference sectors        └────────┘                    │
+│        +5.985                                                       │
+│ [63 LDR]                                       LAST 1:34.959        │
+│                                                GAP  +5.985          │
+├────────────────────────────────────────────────────────────────────┤
+│ TYRE M 17L   STOPS 0   TOP 324   OVT WAIT             CLEAR        │  BOTTOM STRIP
+│ compound/age stops     top speed  overtake mode     flag/track state│
+└────────────────────────────────────────────────────────────────────┘
 ```
+
+**Top strip** — at-a-glance session context: live weather (air / track temp with a sun or rain icon), the selected driver's last name in the live team colour, the wall-clock time, and the session time remaining.
+
+**Center telemetry column** — the big numbers you actually drive by: live **SPEED** (km/h, cyan box), the selected driver's current **GEAR** (huge white digit, dominates the screen), and **RPM** (yellow box, also reflected in the shift-light LEDs). RPM-driven shift lights wrap the screen edge.
+
+**Left timing column** — sector splits laid out like the F1 international feed timing tower:
+- Top: `INT` pill (car directly ahead, with its car number) + the gap to it (`+2.757`), then that car's last three sector times.
+- Middle: **your** driver's three sector times, coloured purple for overall-best, green for personal-best, yellow otherwise.
+- Bottom: leader's three sector times + the gap to leader (`+5.985`) + `LDR` pill with leader's car number.
+
+**Right pace column** — LAP `M/N` and POSITION `X/N` pills, the **INPUTS** panel (`BRAKE PRESSURE` yellow bar above, `THROTTLE POSITION` white bar below — same convention as the F1 international feed input overlay), the `@vicslive` signature widget, and a LAST/GAP readout for the selected driver's most recent lap time and current race gap to leader.
+
+**Bottom strip** — race-status data row: tyre compound (`M`/`S`/`H`/`I`/`W`) plus age in laps, pit-stop count, top speed (running max + speed-trap fused — see [the changelog](CHANGELOG.md)), overtake mode availability, and a flag widget (`CLEAR` / `YELLOW` / `SC` / `VSC` / `RED` / `CHEQUERED`) synced with a red triangle in the top-left for full-course-caution states.
 
 ### Widget binding map
 
 | Widget | Bound to | Notes |
 |---|---|---|
 | Shift lights (LEDs) | `RpmPercent` | 12000 RPM ≈ 92% → all green; 13000 RPM = 100% red. |
-| Speed | `Speed` | |
-| Gear | `Gear` | |
-| Throttle bar | `Throttle` | |
-| Brake bar | `Brake` | |
+| `Speed` cyan box | `Speed` | km/h |
+| Big `Gear` digit | `Gear` | dominates the center column |
+| `Rpm` yellow box | `Rpm` | numeric, matches the LED bar |
+| Throttle bar (`ThrottleChart`) | `Throttle` | white, labelled `THROTTLE POSITION` |
+| Brake bar (`BrakeChart`) | `Brake` | yellow, labelled `BRAKE PRESSURE` |
 | DRS indicator | `DrsActive` / `DrsEligible` | |
-| Position | `Position` | |
-| Lap display (M/N) | `LapDisplay` | |
-| `AheadNumber` | `AheadCarNumber` | shown to the LEFT of the INT sectors row |
-| `BehindNumber` | `LeaderCarNumber` (blank if `Position==1`) | shown to the LEFT of the LDR sectors row |
-| LAST / GAP cluster | `LastLapTime` / `GapToLeader` | Manually-calibrated coords inside the V4 background frame |
-| Sector 1/2/3 | `SectorNTime` + `SectorNIs(Personal/Overall)Best` for color | own driver |
+| `LAP` pill | `LapDisplay` | format `M/N` (current/total) |
+| `POS` pill | `Position` + `TotalDrivers` | format `X/N` |
+| Driver name title | `DriverLastName` upper-case → `F1 LIVE` fallback. TextColor uses `TeamColour` when `Status='Connected'`. | Live broadcast colour (Ferrari `#E80020`, Mercedes `#27F4D2`, etc.) |
+| `AheadNumber` pill | `AheadCarNumber` | "INT" pill to the LEFT of the ahead sectors row |
+| `BehindNumber` pill | `LeaderCarNumber` (blank if `Position==1`) | "LDR" pill to the LEFT of the leader sectors row |
+| Own sector 1/2/3 | `SectorNTime` + `SectorNIs(Personal/Overall)Best` | purple = overall-best, green = personal-best, yellow = other |
 | INT sectors row | `AheadSectorNTime` + ahead best flags | car directly in front |
 | LDR sectors row | `LeaderSectorNTime` + leader best flags | race leader |
-| Tyre | `TyreCompoundShort` + `TyreAge` | |
-| Stops | `PitStopCount` | |
-| Top Speed | `TopSpeed` + `TopSpeedRank` | |
-| Overtake | `OvertakeAvailable` | |
+| Gap to ahead (`+2.757`) | `IntervalToAhead` | shown between INT pill and your driver's sectors |
+| Gap to leader (`+5.985`) | `GapToLeader` | shown above the LDR pill |
+| LAST / GAP cluster | `LastLapTime` / `GapToLeader` | inside the right pace column |
+| Weather (top-left) | `AirTemp` / `TrackTemp` / `Rainfall` | sun / rain icon driven by `Rainfall` boolean |
+| Session clock (top-right) | `SessionClock` | wall-clock time string |
+| Session time remaining (top-right) | `SessionTimeRemaining` | hourglass icon |
+| Tyre (`TYRE`) | `TyreCompoundShort` + `TyreAge` | bottom strip |
+| Stops (`STOPS`) | `PitStopCount` | bottom strip |
+| Top Speed (`TOP`) | `TopSpeed` + `TopSpeedRank` | bottom strip — running max of every live `Speed` sample fused with the upstream `BestSpeeds.ST` snapshot, sanity-capped at 450 km/h |
+| Overtake (`OVT`) | `OvertakeAvailable` | bottom strip — `WAIT` / `READY` / `USED` |
 | Top-left triangle (`INCLogo` + `IncCount`) | `TrackStatusCode` | Repurposed from iRacing incidents counter. Shows when code ∈ {2,4,5,6,7}. Text: YELLOW / SC / RED / VSC. Color: red for RED flag, amber otherwise. |
 | Bottom-right `F1Flag` | `FlagText` (priority) → fallback `TrackStatusCode` | Synced with top triangle. Green for CLEAR/GREEN, amber for YELLOW/SC/VSC/DOUBLE YELLOW, red for RED, white for CHEQUERED. |
-| `@vicslive` signature | static | Personal handle widget between throttle graph and LAST/GAP cluster. |
-| Weather strip (when shown) | `AirTemp` / `TrackTemp` / `Rainfall` | |
-| Session clock | `SessionTimeRemaining` | |
+| `@vicslive` signature | static | Personal handle widget, sits between the INPUTS panel and the LAST/GAP readout in the right column. |
 
 ### Caution status — two complementary widgets
 

@@ -6,6 +6,8 @@ Companion document to the [main README](README.md). This is the *implementer's g
 > **Screen size:** 800 × 480 (GSI Formula Pro Elite V2)
 > **All properties live under namespace** `F1SimHubLivePlugin`.
 
+![F1RaceSim_GSIFPEV2 live capture — HAMILTON on Ferrari red, INPUTS panel showing throttle and brake](docs/screenshots/GSIFPEV2.png)
+
 ---
 
 ## Coordinate system reminder
@@ -115,9 +117,9 @@ Two SimHub `BarChartItem`s plus a header and per-bar labels, mirroring the layou
 | Widget | Bound to | Position | Style |
 |---|---|---|---|
 | `InputsHeader` | static `INPUTS` text | L=540 T=128 W=237 H=24 | Oswald Bold FS=22 white, HA=1 |
-| `BrakeLabel` | static `BRAKE` text | L=540 T=152 W=237 H=19 | Oswald Bold FS=16 white, HA=1 |
+| `BrakeLabel` | static `BRAKE PRESSURE` text | L=540 T=152 W=237 H=19 | Oswald Bold FS=16 white, HA=1 |
 | `BrakeChart` | `$prop('F1SimHubLivePlugin.Brake')` | L=495 T=168 W=280 H=55 | Color `#FFFFC200` (yellow), Thickness=3, PointsCount=100 |
-| `ThrottleLabel` | static `THROTTLE` text | L=540 T=223 W=237 H=19 | Oswald Bold FS=16 white, HA=1 |
+| `ThrottleLabel` | static `THROTTLE POSITION` text | L=540 T=223 W=237 H=19 | Oswald Bold FS=16 white, HA=1 |
 | `ThrottleChart` | `$prop('F1SimHubLivePlugin.Throttle')` | L=495 T=239 W=280 H=55 | Color `#FFFFFFFF` (white), Thickness=2, PointsCount=100 |
 
 Brake on top (yellow) and throttle on bottom (white) match the F1 international-feed convention.
