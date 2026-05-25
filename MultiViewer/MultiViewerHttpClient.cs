@@ -1,0 +1,322 @@
+using System;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using F1SimHubLive.F1Signalr;
+using F1SimHubLive.Telemetry;
+
+namespace F1SimHubLive.MultiViewer
+{
+    /// <summary>
+    /// Polls F1 MultiViewer's local /api/v1/live-timing/CarData endpoint and emits
+    /// DriverSnapshots for the configured driver. Works equally for live sessions
+    /// and synced replays (MultiViewer streams the same JSON shape either way).
+    /// </summary>
+    internal sealed class MultiViewerHttpClient : ITelemetrySource
+    {
+        private readonly string _driverNumber;
+        private readonly string _baseUrl;
+        private readonly int _pollIntervalMs;
+        private readonly int _timingPollIntervalMs;
+        private readonly Action<string> _log;
+        private readonly HttpClient _http;
+        private readonly CancellationTokenSource _cts = new();
+
+        private DateTime _lastEmittedUtc = DateTime.MinValue;
+        private DateTime _raceStartUtc = DateTime.MinValue;
+        private TimeSpan _sessionDuration = TimeSpan.FromHours(2);
+        private int _totalDrivers;
+        private bool _driverInfoEmitted;
+        private bool _everConnected;
+        private int _consecutiveFailures;
+
+        public event Action<DriverSnapshot>? OnSnapshot;
+        public event Action<TimingSnapshot>? OnTimingSnapshot;
+        public event Action<SessionSnapshot>? OnSessionSnapshot;
+        public event Action<WeatherSnapshot>? OnWeatherSnapshot;
+        public event Action<DriverInfoSnapshot>? OnDriverInfoSnapshot;
+        public event Action<string>? OnStatus;
+
+        public MultiViewerHttpClient(string driverNumber, string baseUrl, int pollIntervalMs, int timingPollIntervalMs, Action<string> log)
+        {
+            _driverNumber = driverNumber;
+            _baseUrl = baseUrl.TrimEnd('/');
+            _pollIntervalMs = Math.Max(100, pollIntervalMs);
+            _timingPollIntervalMs = Math.Max(500, timingPollIntervalMs);
+            _log = log;
+            _http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+        }
+
+        public Task StartAsync()
+        {
+            OnStatus?.Invoke("Connecting");
+            _ = Task.Run(() => CarDataLoopAsync(_cts.Token));
+            _ = Task.Run(() => TimingDataLoopAsync(_cts.Token));
+            _ = Task.Run(() => SessionDataLoopAsync(_cts.Token));
+            _ = Task.Run(() => WeatherDataLoopAsync(_cts.Token));
+            return Task.CompletedTask;
+        }
+
+        private async Task CarDataLoopAsync(CancellationToken ct)
+        {
+            string url = $"{_baseUrl}/api/v1/live-timing/CarData";
+            _log("MultiViewer polling CarData " + url + $" every {_pollIntervalMs} ms (driver #{_driverNumber})");
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    string json = await _http.GetStringAsync(url).ConfigureAwait(false);
+                    HandleCarDataResponse(json);
+                    _consecutiveFailures = 0;
+                }
+                catch (Exception ex)
+                {
+                    _consecutiveFailures++;
+                    if (_consecutiveFailures == 1 || _consecutiveFailures % 10 == 0)
+                    {
+                        _log($"MultiViewer CarData poll failed ({_consecutiveFailures}): {ex.Message}");
+                    }
+                    if (_consecutiveFailures >= 3)
+                    {
+                        OnStatus?.Invoke(_everConnected ? "Disconnected" : "WaitingForMultiViewer");
+                    }
+                }
+
+                try { await Task.Delay(_pollIntervalMs, ct).ConfigureAwait(false); }
+                catch (TaskCanceledException) { break; }
+            }
+        }
+
+        private async Task TimingDataLoopAsync(CancellationToken ct)
+        {
+            string tdUrl = $"{_baseUrl}/api/v1/live-timing/TimingData";
+            string appUrl = $"{_baseUrl}/api/v1/live-timing/TimingAppData";
+            string statsUrl = $"{_baseUrl}/api/v1/live-timing/TimingStats";
+            string rcUrl = $"{_baseUrl}/api/v1/live-timing/RaceControlMessages";
+            _log("MultiViewer polling TimingData+TimingAppData+TimingStats+RaceControl every " + _timingPollIntervalMs + " ms");
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    var tdTask = _http.GetStringAsync(tdUrl);
+                    var appTask = _http.GetStringAsync(appUrl);
+                    var statsTask = _http.GetStringAsync(statsUrl);
+                    var rcTask = _http.GetStringAsync(rcUrl);
+                    await Task.WhenAll(tdTask, appTask, statsTask, rcTask).ConfigureAwait(false);
+
+                    var snap = TimingDataDecoder.Parse(tdTask.Result, _driverNumber);
+                    if (snap != null)
+                    {
+                        var (compound, age, pitStops) = TimingAppDataDecoder.Parse(appTask.Result, _driverNumber);
+                        snap.TyreCompound = compound;
+                        snap.TyreAge = age;
+                        snap.PitStopCount = pitStops;
+
+                        var (topSpeed, topSpeedRank) = TimingStatsDecoder.Parse(statsTask.Result, _driverNumber);
+                        snap.TopSpeed = topSpeed;
+                        snap.TopSpeedRank = topSpeedRank;
+
+                        var (ovtEnabled, flagText) = RaceControlDecoder.Parse(rcTask.Result);
+                        snap.OvertakeSystemEnabled = ovtEnabled;
+                        snap.FlagText = flagText;
+                        // Hamilton can use OVT only if system enabled AND he is within 1.0s of car ahead.
+                        snap.OvertakeAvailable = ovtEnabled && IsWithinOneSecond(snap.IntervalToAhead);
+
+                        OnTimingSnapshot?.Invoke(snap);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Timing failures are tracked but don't drive the Status banner; CarData does.
+                    if (_consecutiveFailures == 0)
+                    {
+                        _log("MultiViewer Timing/AppData/Stats/RC poll failed: " + ex.Message);
+                    }
+                }
+
+                try { await Task.Delay(_timingPollIntervalMs, ct).ConfigureAwait(false); }
+                catch (TaskCanceledException) { break; }
+            }
+        }
+
+        private static bool IsWithinOneSecond(string interval)
+        {
+            if (string.IsNullOrEmpty(interval)) return false;
+            // Interval shape: "+0.424" (seconds), "+1L" / "+2L" (laps - never within 1s),
+            // or "" when leading. Reject lap-based gaps and parse the seconds form.
+            if (interval.IndexOf('L') >= 0) return false;
+            string trimmed = interval.TrimStart('+');
+            if (double.TryParse(trimmed, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out double sec))
+            {
+                return sec > 0.0 && sec < 1.0;
+            }
+            return false;
+        }
+
+        private async Task SessionDataLoopAsync(CancellationToken ct)
+        {
+            string lapUrl = $"{_baseUrl}/api/v1/live-timing/LapCount";
+            string statusUrl = $"{_baseUrl}/api/v1/live-timing/TrackStatus";
+            string clockUrl = $"{_baseUrl}/api/v1/live-timing/ExtrapolatedClock";
+            string sessionUrl = $"{_baseUrl}/api/v1/live-timing/SessionData";
+            string driverListUrl = $"{_baseUrl}/api/v1/live-timing/DriverList";
+            _log("MultiViewer polling LapCount+TrackStatus+ExtrapolatedClock+SessionData every " + _timingPollIntervalMs + " ms");
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    var lapTask = _http.GetStringAsync(lapUrl);
+                    var statusTask = _http.GetStringAsync(statusUrl);
+                    var clockTask = _http.GetStringAsync(clockUrl);
+                    var sessionTask = _http.GetStringAsync(sessionUrl);
+                    await Task.WhenAll(lapTask, statusTask, clockTask, sessionTask).ConfigureAwait(false);
+
+                    // DriverList: fetched once (field size doesn't change mid-race). Retry each
+                    // iteration until we get a non-zero count, and until we resolve identity
+                    // fields (TLA / last name / team) for the configured driver number.
+                    if (_totalDrivers == 0 || !_driverInfoEmitted)
+                    {
+                        try
+                        {
+                            string dlJson = await _http.GetStringAsync(driverListUrl).ConfigureAwait(false);
+                            if (_totalDrivers == 0)
+                            {
+                                int n = DriverListDecoder.CountDrivers(dlJson);
+                                if (n > 0) _totalDrivers = n;
+                            }
+                            if (!_driverInfoEmitted)
+                            {
+                                var info = DriverListDecoder.ParseDriverInfo(dlJson, _driverNumber);
+                                if (info != null && (info.LastName.Length > 0 || info.Tla.Length > 0))
+                                {
+                                    _driverInfoEmitted = true;
+                                    _log($"MultiViewer DriverList resolved #{_driverNumber}: " +
+                                         $"{info.Tla} {info.BroadcastName} ({info.TeamName})");
+                                    OnDriverInfoSnapshot?.Invoke(info);
+                                }
+                            }
+                        }
+                        catch { /* try again next tick */ }
+                    }
+
+                    var (currentLap, totalLaps) = LapCountDecoder.Parse(lapTask.Result);
+                    var (code, msg) = TrackStatusDecoder.Parse(statusTask.Result);
+
+                    // Cache race start UTC from SessionData.StatusSeries (entry with SessionStatus="Started").
+                    // In live racing this is "lights out"; in replay it's the recorded moment, which
+                    // pairs correctly with CarData Utc to compute the live replay elapsed time.
+                    if (_raceStartUtc == DateTime.MinValue)
+                    {
+                        var rs = SessionDataDecoder.ParseRaceStartUtc(sessionTask.Result);
+                        if (rs != DateTime.MinValue) _raceStartUtc = rs;
+                    }
+
+                    // Cache session duration limit from the first ExtrapolatedClock baseline we see
+                    // (Remaining at race start = the regulatory time limit; F1 race = ~2h).
+                    var clock = ExtrapolatedClockDecoder.Parse(clockTask.Result);
+                    if (clock.IsValid && clock.Remaining > TimeSpan.Zero &&
+                        clock.Remaining < TimeSpan.FromHours(4))
+                    {
+                        _sessionDuration = clock.Remaining;
+                    }
+
+                    // Live remaining = sessionDuration - (replayNow - raceStart). Use the freshest
+                    // CarData Utc as "now" since ExtrapolatedClock.Utc is frozen during MV replays.
+                    string remainingText = "";
+                    if (_raceStartUtc != DateTime.MinValue && _lastEmittedUtc > _raceStartUtc)
+                    {
+                        var elapsed = _lastEmittedUtc - _raceStartUtc;
+                        var live = _sessionDuration - elapsed;
+                        if (live < TimeSpan.Zero) live = TimeSpan.Zero;
+                        remainingText = ExtrapolatedClockDecoder.Format(live);
+                    }
+
+                    OnSessionSnapshot?.Invoke(new SessionSnapshot
+                    {
+                        Utc = DateTime.UtcNow,
+                        CurrentLap = currentLap,
+                        TotalLaps = totalLaps,
+                        TrackStatusCode = code,
+                        TrackStatusMessage = msg,
+                        SessionTimeRemaining = remainingText,
+                        TotalDrivers = _totalDrivers
+                    });
+                }
+                catch (Exception ex)
+                {
+                    if (_consecutiveFailures == 0)
+                    {
+                        _log("MultiViewer Session poll failed: " + ex.Message);
+                    }
+                }
+
+                try { await Task.Delay(_timingPollIntervalMs, ct).ConfigureAwait(false); }
+                catch (TaskCanceledException) { break; }
+            }
+        }
+
+        private async Task WeatherDataLoopAsync(CancellationToken ct)
+        {
+            string url = $"{_baseUrl}/api/v1/live-timing/WeatherData";
+            const int weatherIntervalMs = 5000;
+            _log("MultiViewer polling WeatherData every " + weatherIntervalMs + " ms");
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    string json = await _http.GetStringAsync(url).ConfigureAwait(false);
+                    var w = WeatherDataDecoder.Parse(json);
+                    if (w != null)
+                    {
+                        w.Utc = DateTime.UtcNow;
+                        OnWeatherSnapshot?.Invoke(w);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (_consecutiveFailures == 0)
+                    {
+                        _log("MultiViewer Weather poll failed: " + ex.Message);
+                    }
+                }
+
+                try { await Task.Delay(weatherIntervalMs, ct).ConfigureAwait(false); }
+                catch (TaskCanceledException) { break; }
+            }
+        }
+
+        private void HandleCarDataResponse(string json)
+        {
+            int emitted = 0;
+            foreach (var snap in CarDataDecoder.ParseCarDataJson(json, _driverNumber))
+            {
+                if (snap.Utc <= _lastEmittedUtc) continue;
+                _lastEmittedUtc = snap.Utc;
+                OnSnapshot?.Invoke(snap);
+                emitted++;
+            }
+            if (emitted > 0 && !_everConnected)
+            {
+                _everConnected = true;
+                OnStatus?.Invoke("Connected");
+                _log("MultiViewer first snapshot received");
+            }
+            else if (emitted > 0 && _consecutiveFailures > 0)
+            {
+                OnStatus?.Invoke("Connected");
+            }
+        }
+
+        public void Dispose()
+        {
+            try { _cts.Cancel(); } catch { }
+            _cts.Dispose();
+            _http.Dispose();
+        }
+    }
+}

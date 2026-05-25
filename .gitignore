@@ -1,0 +1,27 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.lock.json
+packages/
+F1SimHubLive.Settings.json
+
+# Local backups and session artifacts
+*.bak
+*.bak-*
+*.preCarNumbers-*
+*.preSignature-*
+*.preSigResize-*
+*.preFlagStatus-*
+*.preFlagFix-*
+*.preLayerFix-*
+*.preF1FlagSync-*
+
+# Installer publish output
+installer/**/publish/
+installer/**/*.pdb
+
+# OS clutter
+Thumbs.db
+.DS_Store

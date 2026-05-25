@@ -1,0 +1,161 @@
+{
+  "_comment": "Auto-generated from F1 MultiViewer DriverList on 2026-05-25 — 2026 season grid as configured in this MV install. Refresh by re-running gen scripts/refresh-drivers.ps1, or simply let the installer pull live from MV at install time.",
+  "season": 2026,
+  "generated": "2026-05-25T01:27:27Z",
+  "drivers": [
+    {
+      "number": 1,
+      "code": "NOR",
+      "firstName": "Lando",
+      "lastName": "Norris",
+      "team": "McLaren"
+    },
+    {
+      "number": 3,
+      "code": "VER",
+      "firstName": "Max",
+      "lastName": "Verstappen",
+      "team": "Red Bull Racing"
+    },
+    {
+      "number": 5,
+      "code": "BOR",
+      "firstName": "Gabriel",
+      "lastName": "Bortoleto",
+      "team": "Audi"
+    },
+    {
+      "number": 6,
+      "code": "HAD",
+      "firstName": "Isack",
+      "lastName": "Hadjar",
+      "team": "Red Bull Racing"
+    },
+    {
+      "number": 10,
+      "code": "GAS",
+      "firstName": "Pierre",
+      "lastName": "Gasly",
+      "team": "Alpine"
+    },
+    {
+      "number": 11,
+      "code": "PER",
+      "firstName": "Sergio",
+      "lastName": "Perez",
+      "team": "Cadillac"
+    },
+    {
+      "number": 12,
+      "code": "ANT",
+      "firstName": "Kimi",
+      "lastName": "Antonelli",
+      "team": "Mercedes"
+    },
+    {
+      "number": 14,
+      "code": "ALO",
+      "firstName": "Fernando",
+      "lastName": "Alonso",
+      "team": "Aston Martin"
+    },
+    {
+      "number": 16,
+      "code": "LEC",
+      "firstName": "Charles",
+      "lastName": "Leclerc",
+      "team": "Ferrari"
+    },
+    {
+      "number": 18,
+      "code": "STR",
+      "firstName": "Lance",
+      "lastName": "Stroll",
+      "team": "Aston Martin"
+    },
+    {
+      "number": 23,
+      "code": "ALB",
+      "firstName": "Alexander",
+      "lastName": "Albon",
+      "team": "Williams"
+    },
+    {
+      "number": 27,
+      "code": "HUL",
+      "firstName": "Nico",
+      "lastName": "Hulkenberg",
+      "team": "Audi"
+    },
+    {
+      "number": 30,
+      "code": "LAW",
+      "firstName": "Liam",
+      "lastName": "Lawson",
+      "team": "Racing Bulls"
+    },
+    {
+      "number": 31,
+      "code": "OCO",
+      "firstName": "Esteban",
+      "lastName": "Ocon",
+      "team": "Haas F1 Team"
+    },
+    {
+      "number": 41,
+      "code": "LIN",
+      "firstName": "Arvid",
+      "lastName": "Lindblad",
+      "team": "Racing Bulls"
+    },
+    {
+      "number": 43,
+      "code": "COL",
+      "firstName": "Franco",
+      "lastName": "Colapinto",
+      "team": "Alpine"
+    },
+    {
+      "number": 44,
+      "code": "HAM",
+      "firstName": "Lewis",
+      "lastName": "Hamilton",
+      "team": "Ferrari"
+    },
+    {
+      "number": 55,
+      "code": "SAI",
+      "firstName": "Carlos",
+      "lastName": "Sainz",
+      "team": "Williams"
+    },
+    {
+      "number": 63,
+      "code": "RUS",
+      "firstName": "George",
+      "lastName": "Russell",
+      "team": "Mercedes"
+    },
+    {
+      "number": 77,
+      "code": "BOT",
+      "firstName": "Valtteri",
+      "lastName": "Bottas",
+      "team": "Cadillac"
+    },
+    {
+      "number": 81,
+      "code": "PIA",
+      "firstName": "Oscar",
+      "lastName": "Piastri",
+      "team": "McLaren"
+    },
+    {
+      "number": 87,
+      "code": "BEA",
+      "firstName": "Oliver",
+      "lastName": "Bearman",
+      "team": "Haas F1 Team"
+    }
+  ]
+}

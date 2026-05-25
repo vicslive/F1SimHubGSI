@@ -1,0 +1,8 @@
+{
+  "DriverNumber": "44",
+  "OutputHz": 60,
+  "RenderDelayMs": 200,
+  "Source": "F1Live",
+  "MultiViewerBaseUrl": "http://localhost:10101",
+  "MultiViewerPollMs": 250
+}

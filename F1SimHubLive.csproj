@@ -1,0 +1,75 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>F1SimHubLive</RootNamespace>
+    <AssemblyName>F1SimHubLive</AssemblyName>
+    <LangVersion>10</LangVersion>
+    <Nullable>enable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <SimHubPath Condition="'$(SimHubPath)' == ''">$(MSBuildProgramFiles32)\SimHub</SimHubPath>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <InformationalVersion>1.0.0</InformationalVersion>
+    <Product>F1SimHubLive</Product>
+    <Company>vicslive</Company>
+    <Copyright>Copyright © 2026 Victor de Souza</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNet.SignalR.Client" Version="2.4.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="SimHub.Plugins">
+      <HintPath>$(SimHubPath)\SimHub.Plugins.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GameReaderCommon">
+      <HintPath>$(SimHubPath)\GameReaderCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="log4net">
+      <HintPath>$(SimHubPath)\log4net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System.Xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="installer\**" />
+    <EmbeddedResource Remove="installer\**" />
+    <None Remove="installer\**" />
+    <Compile Remove="scripts\**" />
+    <None Remove="scripts\**" />
+    <Compile Remove="dashboards\**" />
+    <None Remove="dashboards\**" />
+  </ItemGroup>
+
+  <!--
+    Auto-deploy the plugin + dashboards into the local SimHub install after a
+    successful build. Skips gracefully when SimHub is running, when SimHub is
+    not installed, or when -p:DeploySimHub=false is passed (CI sets this).
+
+    Pass -p:StartSimHub=true to auto-launch SimHubWPF.exe after a successful
+    deploy (handy for dev iteration: close SimHub, build, re-launch).
+  -->
+  <PropertyGroup>
+    <DeploySimHub Condition="'$(DeploySimHub)' == ''">true</DeploySimHub>
+    <StartSimHub Condition="'$(StartSimHub)' == ''">false</StartSimHub>
+  </PropertyGroup>
+  <Target Name="DeployToSimHub" AfterTargets="Build" Condition="'$(DeploySimHub)' == 'true'">
+    <PropertyGroup>
+      <_DeployStartFlag Condition="'$(StartSimHub)' == 'true'"> -StartSimHub</_DeployStartFlag>
+    </PropertyGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\deploy.ps1&quot; -DllPath &quot;$(TargetPath)&quot; -ProjectRoot &quot;$(MSBuildProjectDirectory)&quot;$(_DeployStartFlag)"
+          IgnoreExitCode="true"
+          ContinueOnError="WarnAndContinue" />
+  </Target>
+
+</Project>

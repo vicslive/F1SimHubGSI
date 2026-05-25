@@ -1,0 +1,21 @@
+{
+  "ScreenCount": 1.0,
+  "InGameScreensIndexs": [],
+  "IdleScreensIndexs": [
+    0
+  ],
+  "MainPreviewIndex": 0,
+  "IsOverlay": false,
+  "OverlaySizeWarning": false,
+  "MetadataVersion": 2.0,
+  "EnableOnDashboardMessaging": true,
+  "PitScreensIndexs": [],
+  "SimHubVersion": "9.11.13",
+  "Category": null,
+  "Title": "F1RaceSim_GSIFPEV2",
+  "Description": "GSI FPEv2 Dash, initial release",
+  "Author": "GSI",
+  "Width": 800.0,
+  "Height": 480.0,
+  "DashboardVersion": ""
+}

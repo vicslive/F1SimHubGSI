@@ -1,0 +1,168 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.0.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: write       # to create the GitHub release
+  id-token: write       # required for Azure federated identity (Trusted Signing)
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    env:
+      DOTNET_VERSION: "8.0.x"
+      INSTALLER_PROJECT: installer/F1SimHubLive.Installer.csproj
+      INSTALLER_OUTPUT: installer/publish/F1SimHubLive-Installer.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Resolve build version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $env:GITHUB_REF -replace '^refs/tags/',''
+          } else {
+            "${{ inputs.tag }}"
+          }
+          # Strip leading 'v' if present, e.g. v1.0.2 -> 1.0.2
+          $version = $tag -replace '^v',''
+          # GitVersion-compatible 4-part for AssemblyVersion (pad to 4 components)
+          $parts = $version.Split('.')
+          while ($parts.Count -lt 4) { $parts += '0' }
+          $assemblyVersion = ($parts[0..3] -join '.')
+          Write-Host "Tag:             $tag"
+          Write-Host "Version:         $version"
+          Write-Host "AssemblyVersion: $assemblyVersion"
+          "tag=$tag"                         | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version"                 | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "assemblyVersion=$assemblyVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Restore + publish single-file installer
+        shell: pwsh
+        run: |
+          dotnet publish ${{ env.INSTALLER_PROJECT }} -c Release -o installer/publish `
+            -p:Version=${{ steps.ver.outputs.version }} `
+            -p:AssemblyVersion=${{ steps.ver.outputs.assemblyVersion }} `
+            -p:FileVersion=${{ steps.ver.outputs.assemblyVersion }} `
+            -p:InformationalVersion=${{ steps.ver.outputs.version }}
+          Get-Item ${{ env.INSTALLER_OUTPUT }} | Select Name, Length
+
+      # ------------------------------------------------------------------
+      # Optional: Trusted Signing step. Skipped unless ALL of the following
+      # repo secrets are configured:
+      #   AZURE_TENANT_ID
+      #   AZURE_CLIENT_ID            (App registration with federated creds)
+      #   AZURE_TRUSTED_SIGNING_ENDPOINT  (e.g. https://eus.codesigning.azure.net)
+      #   AZURE_TRUSTED_SIGNING_ACCOUNT
+      #   AZURE_TRUSTED_SIGNING_PROFILE
+      # ------------------------------------------------------------------
+      - name: Check signing config
+        id: signcheck
+        shell: pwsh
+        run: |
+          $configured = $true
+          foreach ($v in @(
+            "${{ secrets.AZURE_TENANT_ID }}",
+            "${{ secrets.AZURE_CLIENT_ID }}",
+            "${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}",
+            "${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}",
+            "${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}"
+          )) {
+            if ([string]::IsNullOrWhiteSpace($v)) { $configured = $false }
+          }
+          "configured=$($configured.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($configured) {
+            Write-Host "Trusted Signing secrets present - will sign."
+          } else {
+            Write-Host "Trusted Signing secrets not configured - skipping sign step."
+          }
+
+      - name: Azure login (federated)
+        if: steps.signcheck.outputs.configured == 'true'
+        uses: azure/login@v2
+        with:
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Sign installer with Trusted Signing
+        if: steps.signcheck.outputs.configured == 'true'
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          endpoint: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}
+          files-folder: installer/publish
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Compute SHA256
+        id: hash
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash ${{ env.INSTALLER_OUTPUT }} -Algorithm SHA256).Hash.ToLower()
+          Write-Host "sha256: $h"
+          "sha256=$h" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Determine tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $env:GITHUB_REF -replace '^refs/tags/',''
+          } else {
+            "${{ inputs.tag }}"
+          }
+          Write-Host "Tag: $tag"
+          "value=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $signed = "${{ steps.signcheck.outputs.configured }}" -eq "true"
+          $hash = "${{ steps.hash.outputs.sha256 }}"
+          $tag = "${{ steps.tag.outputs.value }}"
+          $signedLine = if ($signed) {
+            "**Signed:** Yes (Microsoft Trusted Signing, SHA-256, RFC3161 timestamped)"
+          } else {
+            "**Signed:** No (SmartScreen may warn on first run - More info / Run anyway)"
+          }
+          $nl = [Environment]::NewLine
+          $body = "F1SimHubLive Installer build for $tag." + $nl + $nl `
+                + $signedLine + $nl + $nl `
+                + "**SHA-256:** ``$hash``" + $nl + $nl `
+                + "See [CHANGELOG.md](../../blob/main/CHANGELOG.md) for what's new."
+          $path = "release-notes.md"
+          $body | Out-File -FilePath $path -Encoding utf8
+          "path=$path" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Create / update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: ${{ steps.tag.outputs.value }}
+          body_path: ${{ steps.notes.outputs.path }}
+          files: |
+            ${{ env.INSTALLER_OUTPUT }}
+          fail_on_unmatched_files: true
