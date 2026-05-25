@@ -2,7 +2,7 @@
 
 **SimHub plugin + custom Dash Studio dashboard that pipes live Formula 1 telemetry from F1's broadcast feed (or MultiViewer replay) onto a SimHub-connected wheel screen.**
 
-![F1RaceSim_GSIFPEV2 dashboard live during a race — HAMILTON in Ferrari red, INPUTS panel active](docs/screenshots/GSIFPEV2.png)
+![F1RaceSim_GSIFPEV2 dashboard live mid-race — HAMILTON in Ferrari red at 321 km/h, gear 8, RPM 11219, S1 and S2 splits in green and magenta, throttle and brake inputs visible](docs/screenshots/GSIFPEV2-2.png)
 
 The current ``F1RaceSim_GSIFPEV2`` dashboard is laid out for an 800×480 wheel screen and has been validated on the [GSI Formula Pro Elite V2](https://gomezsimindustries.com/products/formula-pro-elite-v2) and [GSI Hyper P1](https://gomezsimindustries.com/products/hyper-p1). Any other SimHub-LCD-capable wheel at the same resolution should also work; resolutions other than 800×480 will crop or scale.
 
@@ -313,7 +313,7 @@ Populated once per session as soon as the upstream `DriverList` is fetched. Empt
 
 `F1RaceSim_GSIFPEV2` is a custom Dash Studio template that ships in `dashboards/F1RaceSim_GSIFPEV2.djson`. It mimics the F1 TV broadcast graphic layout, scaled for the GSI wheel's 800×480 screen.
 
-![F1RaceSim_GSIFPEV2 layout — full broadcast grid with S1/S2/S3 sector times, gear 8, RPM 11219, speed 321, throttle and brake inputs, magenta personal-best sector](docs/screenshots/GSIFPEV2-2.png)
+![F1RaceSim_GSIFPEV2 layout — full broadcast grid showing the timing column, center telemetry column with gear, pace column with LAP, POS, INPUTS, and the bottom strip with TYRE, STOPS, TOP speed, OVT mode, and flag status](docs/screenshots/GSIFPEV2.png)
 
 ### Layout
 

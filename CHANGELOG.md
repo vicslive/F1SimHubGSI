@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Dates in `YYYY-M
 
 ## [Unreleased]
 
+### Changed
+- Swapped hero and layout screenshot assignments: the data-rich mid-race shot (`docs/screenshots/GSIFPEV2-2.png`) is now the README/DASHBOARD hero, and the cleaner full-grid shot (`docs/screenshots/GSIFPEV2.png`) anchors the README layout section. Bigger visual impact at the top of the docs.
+
 ## [1.0.2] — 2026-05-25
 
 ### Changed

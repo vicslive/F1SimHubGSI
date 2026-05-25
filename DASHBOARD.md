@@ -6,7 +6,7 @@ Companion document to the [main README](README.md). This is the *implementer's g
 > **Screen size:** 800 × 480 (GSI Formula Pro Elite V2)
 > **All properties live under namespace** `F1SimHubLivePlugin`.
 
-![F1RaceSim_GSIFPEV2 live capture — HAMILTON on Ferrari red, INPUTS panel showing throttle and brake](docs/screenshots/GSIFPEV2.png)
+![F1RaceSim_GSIFPEV2 live capture mid-race — HAMILTON in Ferrari red at 321 km/h in gear 8 with throttle and brake bars active](docs/screenshots/GSIFPEV2-2.png)
 
 ---
 
