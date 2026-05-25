@@ -9,14 +9,14 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>F1SimHubLive-Installer</AssemblyName>
     <RootNamespace>F1SimHubLive.Installer</RootNamespace>
-    <Version>1.0.1</Version>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.0.1.0</FileVersion>
-    <InformationalVersion>1.0.1</InformationalVersion>
+    <Version>1.0.2</Version>
+    <AssemblyVersion>1.0.2.0</AssemblyVersion>
+    <FileVersion>1.0.2.0</FileVersion>
+    <InformationalVersion>1.0.2</InformationalVersion>
     <AssemblyTitle>F1SimHubLive Installer</AssemblyTitle>
     <Product>F1SimHubLive</Product>
     <Company>vicslive</Company>
-    <Copyright>Copyright Â© 2026 Victor de Souza</Copyright>
+    <Copyright>Copyright Ã‚Â© 2026 Victor de Souza</Copyright>
     <Description>Installs the F1SimHubLive SimHub plugin and F1RaceSim_GSIFPEV2 dashboard</Description>
   </PropertyGroup>
 

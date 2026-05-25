@@ -313,7 +313,7 @@ Populated once per session as soon as the upstream `DriverList` is fetched. Empt
 
 `F1RaceSim_GSIFPEV2` is a custom Dash Studio template that ships in `dashboards/F1RaceSim_GSIFPEV2.djson`. It mimics the F1 TV broadcast graphic layout, scaled for the GSI wheel's 800×480 screen.
 
-![F1RaceSim_GSIFPEV2 dashboard live during a race — HAMILTON in Ferrari red, INPUTS panel active, sector splits coloured](docs/screenshots/GSIFPEV2.png)
+![F1RaceSim_GSIFPEV2 layout — full broadcast grid with S1/S2/S3 sector times, gear 8, RPM 11219, speed 321, throttle and brake inputs, magenta personal-best sector](docs/screenshots/GSIFPEV2-2.png)
 
 ### Layout
 

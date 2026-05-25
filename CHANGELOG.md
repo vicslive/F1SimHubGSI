@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Dates in `YYYY-M
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-05-25
+
+### Changed
+- Dashboard signature separator switched from middle-dot `·` to ASCII pipe `|` (`github  |  instagram`). The middle-dot character is multi-byte UTF-8 and was getting mojibake'd by Dash Studio's save-encoding round-trip; ASCII pipe is durable across any future save cycle.
+
+### Added
+- Second screenshot at `docs/screenshots/GSIFPEV2-2.png` showing the full broadcast layout with all three sector times (S1/S2/S3), gear, RPM, speed, throttle/brake inputs, and a magenta personal-best sector. Now used in the README "F1RaceSim_GSIFPEV2 dashboard" layout section; the original `GSIFPEV2.png` remains the README/DASHBOARD hero.
+
 ## [1.0.1] — 2026-05-25
 
 ### Changed
