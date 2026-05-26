@@ -201,6 +201,8 @@
                 <TextBlock x:Name="DriverSourceLabel" Foreground="#FFAAAAAA" FontStyle="Italic" Margin="0,0,0,8"/>
                 <ComboBox x:Name="CmbDriver" Padding="10,8" FontSize="14" Background="#FF242424" Foreground="Black"
                           DisplayMemberPath="DisplayName" />
+                <TextBlock Foreground="#FF8AB4F8" FontSize="12" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Text="Don't sweat this choice — after install, use the F1SimHubLive Driver Picker (Start Menu) to flip drivers live during the race in one click. No restart needed." />
 
                 <TextBlock Text="Data source" FontSize="16" FontWeight="SemiBold" Margin="0,24,0,6"/>
                 <RadioButton x:Name="RbMultiViewer" GroupName="Src" Margin="0,4" IsChecked="True" Foreground="#FFE0E0E0">
