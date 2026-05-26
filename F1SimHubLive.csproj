@@ -8,10 +8,10 @@
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <SimHubPath Condition="'$(SimHubPath)' == ''">$(MSBuildProgramFiles32)\SimHub</SimHubPath>
-    <Version>1.0.2</Version>
-    <AssemblyVersion>1.0.2.0</AssemblyVersion>
-    <FileVersion>1.0.2.0</FileVersion>
-    <InformationalVersion>1.0.2</InformationalVersion>
+    <Version>1.0.3</Version>
+    <AssemblyVersion>1.0.3.0</AssemblyVersion>
+    <FileVersion>1.0.3.0</FileVersion>
+    <InformationalVersion>1.0.3</InformationalVersion>
     <Product>F1SimHubLive</Product>
     <Company>vicslive</Company>
     <Copyright>Copyright Ã‚Â© 2026 Victor de Souza</Copyright>

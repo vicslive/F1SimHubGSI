@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Dates in `YYYY-M
 ### Changed
 - Swapped hero and layout screenshot assignments: the data-rich mid-race shot (`docs/screenshots/GSIFPEV2-2.png`) is now the README/DASHBOARD hero, and the cleaner full-grid shot (`docs/screenshots/GSIFPEV2.png`) anchors the README layout section. Bigger visual impact at the top of the docs.
 
+## [1.0.3] — 2026-05-25
+
+### Fixed
+- **LED rewire on install**: legacy plugin-name references in per-device LED configurations are now auto-rewired during installation. The plugin was renamed twice during development (`F1SimSubGSIPlugin` → `F1SimHubGSIPlugin` → `F1SimHubLivePlugin`), but per-device `settings.json` files under `PluginsData\Common\Devices\<guid>\` were never repointed. After upgrading from a pre-v1.0.0 build the wheel LEDs would blink white only and the RPM gradient would not render, because every zone-enable formula like `if([F1SimSubGSIPlugin.RpmPercent] > 78, 1, 0)` silently evaluated to 0 (no such plugin loaded). The installer now scans every SimHub device's `settings.json`, replaces `F1SimSubGSIPlugin.` and `F1SimHubGSIPlugin.` prefixes with `F1SimHubLivePlugin.`, and writes a timestamped backup (`settings.json.preLedRewire-<YYYYMMDD-HHMMSS>`) before mutating each touched file. Idempotent: re-running the installer on an already-clean device is a no-op.
+
 ## [1.0.2] — 2026-05-25
 
 ### Changed

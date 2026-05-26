@@ -70,7 +70,7 @@ The easiest way to deploy F1SimHubLive to a new machine (for example, your media
    - **Welcome** — overview.
    - **Prerequisites** — auto-detects SimHub + F1 MultiViewer install paths, probes the MultiViewer API to confirm your F1 TV subscription is active **and** that Live Timing is actively streaming (a successful `SessionInfo` response — not just `Heartbeat`).
    - **Driver & source** — pick any driver from the dropdown (loaded live from MultiViewer's current grid, with a bundled fallback list). Choose data source (MultiViewer recommended — works for both live and replays).
-   - **Install** — copies the plugin DLLs, dashboard files, writes `F1SimHubLive.Settings.json`, and restarts SimHub.
+   - **Install** — copies the plugin DLLs, dashboard files, writes `F1SimHubLive.Settings.json`, **rewires any legacy plugin-name references in per-device LED configurations** (see [LED config auto-rewire](#led-config-auto-rewire) below), and restarts SimHub.
 5. After install, in SimHub: enable the plugin under *Settings → Plugins*, then open *Dash Studio → F1RaceSim_GSIFPEV2* and select it on your wheel.
 
 The installer is a single self-contained .exe (~90 MB) — no .NET runtime install required on the target machine. Source for the installer lives under [`installer/`](installer/).
@@ -80,6 +80,23 @@ The installer is a single self-contained .exe (~90 MB) — no .NET runtime insta
 On launch, the installer asks the GitHub Releases API whether a newer version exists. If yes, a yellow banner appears at the top of the Welcome page with a **Download** button (opens the latest release in your browser) and a **Continue** button (proceed with what you have). The check runs once per launch, has a 3-second timeout, and **never blocks install** — if you're offline, GitHub is rate-limiting, or anything else goes wrong, the banner simply stays hidden and the installer behaves exactly as before. This means an installer .exe sitting in your Downloads folder for months won't silently put you out of date — it will tell you when you run it.
 
 The installer also reads `FileVersionInfo` of any existing `F1SimHubLive.dll` already deployed under your SimHub directory and logs both the existing and freshly-installed versions to the deploy log pane, so upgrades are explicit (e.g. *"Existing F1SimHubLive.dll detected — version 1.1.0. … Installed F1SimHubLive.dll version 1.1.1."*) rather than silent overwrites.
+
+### LED config auto-rewire
+
+This plugin was renamed twice during early development (`F1SimSubGSIPlugin` → `F1SimHubGSIPlugin` → `F1SimHubLivePlugin`). Plugin-name string references live in two places SimHub uses:
+
+1. **Dashboard files** (`*.djson`) — these have always been kept in sync with each rename.
+2. **Per-device LED configurations** (`PluginsData\Common\Devices\<guid>\settings.json`) — these were NOT touched by earlier installers. If you ran a pre-v1.0.3 install (or hand-authored your LED zones against an early build of the plugin), every zone-enable formula like `if([F1SimSubGSIPlugin.RpmPercent] > 78, 1, 0)` silently evaluates to 0 once the old plugin DLL is uninstalled — and your wheel LEDs blink white only with no RPM gradient.
+
+From v1.0.3 onward, the installer scans every SimHub device's `settings.json`, replaces any `F1SimSubGSIPlugin.` and `F1SimHubGSIPlugin.` prefixes with `F1SimHubLivePlugin.`, and writes a timestamped `settings.json.preLedRewire-<YYYYMMDD-HHMMSS>` backup before mutating each touched file. The pass is idempotent — re-running the installer on an already-clean device is a no-op and creates no extra backups.
+
+You'll see lines like this in the deploy log pane:
+```
+Scanning per-device LED configurations for stale plugin-name references...
+Device 'GSI Formula Pro Elite V2': backed up settings.json -> settings.json.preLedRewire-20260525-204334
+Device 'GSI Formula Pro Elite V2': rewired 10 legacy plugin reference(s) -> F1SimHubLivePlugin.*.
+LED config rewire: patched 10 reference(s) across 1 device(s).
+```
 
 ---
 
@@ -546,6 +563,10 @@ foreach ($p in 'Status','Rpm','Gear','Speed','Position','LapDisplay','TrackStatu
 
 **Properties show but RPM/Gear stay at 0:**
 - The CarData topic is per-driver. Confirm `DriverNumber` matches a driver currently in the field. Spelling/case doesn't matter — F1 uses raw integers as strings.
+
+**Wheel LEDs blink white only — no RPM gradient:**
+- Your per-device LED configuration still references a legacy plugin name (`F1SimSubGSIPlugin.` or `F1SimHubGSIPlugin.`) that no longer loads. Run the v1.0.3+ installer — it auto-rewires these references and creates a `settings.json.preLedRewire-<stamp>` backup. See [LED config auto-rewire](#led-config-auto-rewire) for the full mechanism. If you want to verify manually, search for `F1SimSubGSIPlugin.` or `F1SimHubGSIPlugin.` inside `C:\Program Files (x86)\SimHub\PluginsData\Common\Devices\<your-guid>\settings.json` — there should be zero matches after the rewire.
+- Also confirm a SimHub-recognized game is running. The default LED tree gates everything on `DataCorePlugin.GameRunning = 1`, so the gradient won't fire from MultiViewer-only telemetry yet.
 
 **Shift lights look choppy:**
 - Lower `RenderDelayMs` toward 100. Below 100 you'll start to see hold (one sample staying put) before the next arrives.

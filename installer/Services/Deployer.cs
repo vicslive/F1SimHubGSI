@@ -32,12 +32,20 @@ public sealed class Deployer
     public event Action<int>? Progress;
 
     private readonly IdleDashboardService _idle = new();
+    private readonly LedConfigRewireService _ledRewire = new();
 
     /// <summary>
     /// Per-device idle-dashboard changes recorded during the last deploy. Empty when
     /// <see cref="DeployOptions.SetIdleDashboard"/> is false.
     /// </summary>
     public List<IdleDashboardChange> LastIdleDashboardChanges { get; private set; } = new();
+
+    /// <summary>
+    /// Per-device LED-config plugin-name rewire results recorded during the last deploy.
+    /// Empty list means no devices were scanned; entries with <c>Modified=false</c> and
+    /// <c>OccurrencesReplaced=0</c> mean the device was already clean.
+    /// </summary>
+    public List<LedRewireChange> LastLedRewireChanges { get; private set; } = new();
 
     private void L(string msg) => Log?.Invoke(msg);
     private void P(int pct) => Progress?.Invoke(pct);
@@ -72,6 +80,27 @@ public sealed class Deployer
         L($"Writing Settings.json for driver #{opts.DriverNumber} (source: {opts.Source})...");
         WriteSettings(opts);
         P(85);
+
+        L("");
+        L("Scanning per-device LED configurations for stale plugin-name references...");
+        LastLedRewireChanges = _ledRewire.RewireEverywhere(opts.SimHubInstallDir, L);
+        var rewiredDevices = 0;
+        var rewiredTotal = 0;
+        foreach (var c in LastLedRewireChanges)
+        {
+            if (!c.Modified) continue;
+            rewiredDevices++;
+            rewiredTotal += c.OccurrencesReplaced;
+        }
+        if (rewiredDevices > 0)
+        {
+            L($"LED config rewire: patched {rewiredTotal} reference(s) across {rewiredDevices} device(s).");
+        }
+        else
+        {
+            L("LED config rewire: no stale references found.");
+        }
+        P(90);
 
         if (opts.SetIdleDashboard)
         {
