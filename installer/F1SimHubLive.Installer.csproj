@@ -9,9 +9,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>F1SimHubLive-Installer</AssemblyName>
     <RootNamespace>F1SimHubLive.Installer</RootNamespace>
-    <Version>1.0.3</Version>
-    <AssemblyVersion>1.0.3.0</AssemblyVersion>
-    <FileVersion>1.0.3.0</FileVersion>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
     <InformationalVersion>1.0.3</InformationalVersion>
     <AssemblyTitle>F1SimHubLive Installer</AssemblyTitle>
     <Product>F1SimHubLive</Product>
@@ -38,5 +38,43 @@
     <EmbeddedResource Include="Assets\F1RaceSim_GSIFPEV2.djson.00.png" />
     <EmbeddedResource Include="Assets\drivers-fallback.json" />
   </ItemGroup>
+
+  <!--
+    Embed the published Driver Picker exe so the installer can drop it next
+    to the plugin DLL. The picker is built+published by the PublishPicker
+    target below; the EmbeddedResource entry references the published path
+    and is wrapped in <Exists> so the project still loads in IDEs before the
+    first build.
+  -->
+  <ItemGroup>
+    <EmbeddedResource
+        Include="..\picker\bin\$(Configuration)\net8.0-windows\win-x64\publish\F1SimHubLive-Picker.exe"
+        Condition="Exists('..\picker\bin\$(Configuration)\net8.0-windows\win-x64\publish\F1SimHubLive-Picker.exe')">
+      <LogicalName>F1SimHubLive-Picker.exe</LogicalName>
+      <Visible>false</Visible>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="PublishPicker"
+          BeforeTargets="ResolveReferences;PrepareResources;CoreCompile"
+          Condition="!Exists('..\picker\bin\$(Configuration)\net8.0-windows\win-x64\publish\F1SimHubLive-Picker.exe')">
+    <Message Importance="high"
+             Text="Publishing F1SimHubLive.Picker ($(Configuration)) so the installer can embed it..." />
+    <MSBuild Projects="..\picker\F1SimHubLive.Picker.csproj"
+             Targets="Restore;Publish"
+             Properties="Configuration=$(Configuration)" />
+    <!--
+      Dynamically add the embedded resource now that the picker has been
+      published — the static ItemGroup above only kicks in on subsequent builds
+      after the publish output is cached on disk.
+    -->
+    <ItemGroup>
+      <EmbeddedResource
+          Include="..\picker\bin\$(Configuration)\net8.0-windows\win-x64\publish\F1SimHubLive-Picker.exe">
+        <LogicalName>F1SimHubLive-Picker.exe</LogicalName>
+        <Visible>false</Visible>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
 
 </Project>

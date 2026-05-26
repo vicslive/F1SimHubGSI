@@ -9,6 +9,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Dates in `YYYY-M
 ### Changed
 - Swapped hero and layout screenshot assignments: the data-rich mid-race shot (`docs/screenshots/GSIFPEV2-2.png`) is now the README/DASHBOARD hero, and the cleaner full-grid shot (`docs/screenshots/GSIFPEV2.png`) anchors the README layout section. Bigger visual impact at the top of the docs.
 
+## [1.1.0] — 2026-05-26
+
+### Added
+- **Live driver hot-reload.** The plugin now watches `settings.json` and applies a `DriverNumber` change in-flight — no SimHub restart, no MV warm-up wait. Other settings are intentionally left frozen mid-session (URLs, polling intervals); only the driver number is hot-swapped. On a change the plugin resets `_lastEmittedUtc` and re-emits `DriverInfo` so the dashboard immediately repaints with the new driver's name, TLA, team colour, and racing number. Top-speed high-water mark is per-driver. Debounced FileSystemWatcher (250ms) to absorb Windows's double-fire on save.
+- **F1SimHubLive Driver Picker** — standalone WPF app (`picker/F1SimHubLive.Picker.csproj`) for mid-race driver switching. Big team-coloured TLA tiles, current driver highlighted, always-on-top by default. One click on a driver writes the new `DriverNumber` to `settings.json` and the plugin picks it up within ~1 second. Driver list is fetched live from MultiViewer (`/api/v1/live-timing/DriverList`) every 5 seconds, with a bundled-fallback grid for offline use.
+- **Championship-order sort in the picker.** Drivers are paired by team and the teams are ordered by current Constructors' Championship position (pulled from MultiViewer's `/api/v1/live-timing/ChampionshipPrediction`). Within a team, the leading driver by points is shown first. The current points tally for each driver is shown subtly under the racing number. Graceful fallback to race-number order when standings are unavailable (qualifying-only sessions, MV offline, season-opening race).
+- **Picker integrated into the installer.** `F1SimHubLive-Installer.exe` now chain-publishes the picker, embeds it as a resource, copies it next to the plugin in the SimHub install directory on deploy, and creates an All-Users Start Menu shortcut (`F1SimHubLive\F1SimHubLive Driver Picker`). New `AutoLaunchPicker` setting (default `false`) lets the plugin spawn the picker automatically when SimHub starts; left off by default to avoid a UAC prompt on every SimHub launch.
+- **`scripts/install-picker.ps1`** — helper script for local deploys without a full installer rebuild. Auto-builds the picker if not yet published, copies the exe to the SimHub install dir, and creates the Start Menu shortcut. Must be run elevated.
+
+### Changed
+- Bumped plugin / installer / picker versions to `1.1.0`.
+
 ## [1.0.3] — 2026-05-25
 
 ### Fixed

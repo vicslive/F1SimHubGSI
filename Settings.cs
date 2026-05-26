@@ -18,6 +18,15 @@ namespace F1SimHubLive
         public int MultiViewerPollMs { get; set; } = 250;
         public int MultiViewerTimingPollMs { get; set; } = 1000;
 
+        /// <summary>
+        /// When true, the plugin launches F1SimHubLive-Picker.exe (deployed next
+        /// to the plugin DLL) on Init so the driver-picker window pops up with
+        /// SimHub. The picker manifest requests administrator, so unattended
+        /// SimHub starts will trigger a UAC prompt — leave this off unless you
+        /// always start SimHub elevated, and use the Start Menu shortcut otherwise.
+        /// </summary>
+        public bool AutoLaunchPicker { get; set; } = false;
+
         public static Settings Default => new();
 
         public static Settings Load(string path, Action<string>? log = null)

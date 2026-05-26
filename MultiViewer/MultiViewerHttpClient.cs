@@ -14,7 +14,7 @@ namespace F1SimHubLive.MultiViewer
     /// </summary>
     internal sealed class MultiViewerHttpClient : ITelemetrySource
     {
-        private readonly string _driverNumber;
+        private volatile string _driverNumber;
         private readonly string _baseUrl;
         private readonly int _pollIntervalMs;
         private readonly int _timingPollIntervalMs;
@@ -310,6 +310,21 @@ namespace F1SimHubLive.MultiViewer
             {
                 OnStatus?.Invoke("Connected");
             }
+        }
+
+        public void SetDriverNumber(string driverNumber)
+        {
+            if (string.IsNullOrWhiteSpace(driverNumber)) return;
+            string normalized = driverNumber.Trim();
+            if (normalized == _driverNumber) return;
+            string previous = _driverNumber;
+            _driverNumber = normalized;
+            // Reset per-driver filter state so the new driver's frames are
+            // accepted starting now, and DriverInfo (TLA / team / name) is
+            // re-resolved from the next DriverList poll.
+            _lastEmittedUtc = DateTime.MinValue;
+            _driverInfoEmitted = false;
+            _log($"driver switch {previous} -> {normalized}");
         }
 
         public void Dispose()

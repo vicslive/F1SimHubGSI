@@ -41,16 +41,17 @@ F1 TV broadcast (~1–3s behind live)
 5. [Two data sources: F1 Live vs MultiViewer](#two-data-sources-f1-live-vs-multiviewer)
 6. [SimHub property reference](#simhub-property-reference)
 7. [F1RaceSim_GSIFPEV2 dashboard](#F1RaceSim_GSIFPEV2-dashboard)
-8. [Build the plugin](#build-the-plugin)
-9. [Install (manual)](#install-manual)
-10. [Configure](#configure)
-11. [Run a session](#run-a-session)
-12. [Troubleshooting](#troubleshooting)
-13. [File layout](#file-layout)
-14. [Known limitations](#known-limitations)
-15. [License](#license)
-16. [Companion docs](#companion-docs)
-17. [Contributing](#contributing)
+8. [Driver Picker (mid-race driver switching)](#driver-picker-mid-race-driver-switching)
+9. [Build the plugin](#build-the-plugin)
+10. [Install (manual)](#install-manual)
+11. [Configure](#configure)
+12. [Run a session](#run-a-session)
+13. [Troubleshooting](#troubleshooting)
+14. [File layout](#file-layout)
+15. [Known limitations](#known-limitations)
+16. [License](#license)
+17. [Companion docs](#companion-docs)
+18. [Contributing](#contributing)
 
 ---
 
@@ -421,6 +422,74 @@ The dashboard uses **two** flag indicators that stay in sync:
 - 🟡 Amber text + 🔺 red triangle = YELLOW / SC / VSC (race continues, caution active)
 - 🔴 Red text + 🔺 red triangle = RED flag (race halted)
 - ⚪ White text = CHEQUERED (race finished)
+
+---
+
+## Driver Picker (mid-race driver switching)
+
+Hamilton crashes on lap 23. You want to flip the wheel to Antonelli without
+stopping SimHub, editing JSON, and sitting through MultiViewer's ~30-second
+warm-up after a restart. That's what the **F1SimHubLive Driver Picker** is for.
+
+![Driver Picker](docs/screenshots/picker.png)
+
+### What it does
+
+- Standalone WPF window, ~320×640, always-on-top by default. Designed to live
+  in the corner of a second monitor during the race.
+- Polls MultiViewer's `DriverList` every 5 seconds, so it always shows the
+  current grid. Bundled fallback list when MV is unreachable.
+- Drivers are **grouped by team**, and **teams are ordered by current
+  Constructors' Championship position** (from MultiViewer's
+  `ChampionshipPrediction`). Within a team, the higher-points driver is
+  listed first. Each driver's current points tally is shown subtly under
+  their racing number.
+- One click on a driver writes the new `DriverNumber` to `settings.json`. The
+  plugin's `FileSystemWatcher` picks up the change within ~250ms and the wheel
+  flips to the new driver inside about a second — **no SimHub restart, no MV
+  warm-up wait**.
+- The currently-active driver row is highlighted with a coloured border.
+  Hover any other driver and the row glows; click and it blinks green for
+  500ms as the confirm.
+- Graceful fallback to race-number order when standings are unavailable
+  (qualifying-only sessions, MV offline, season-opening race).
+
+### Launching it
+
+The v1.1.0 installer creates an All-Users Start Menu shortcut:
+
+```
+Start Menu → F1SimHubLive → F1SimHubLive Driver Picker
+```
+
+You can also pin it to the taskbar. The picker is installed alongside the
+plugin DLLs in the SimHub install directory:
+
+```
+C:\Program Files (x86)\SimHub\F1SimHubLive-Picker.exe
+```
+
+If you want the picker to launch automatically when SimHub starts, set
+`AutoLaunchPicker` to `true` in `settings.json`. **Off by default** because the
+picker needs to write to `Program Files (x86)\SimHub\settings.json`, which
+requires admin — so it ships with a `requireAdministrator` manifest, and
+auto-launching it from SimHub will trigger a UAC prompt every time SimHub
+starts. Most people prefer the Start Menu shortcut.
+
+### Local-only deploy (during development)
+
+If you've built the repo from source and just want the picker live on your
+machine without bouncing through the full installer, run from an **elevated**
+PowerShell:
+
+```powershell
+cd C:\path\to\F1SimHubLive
+.\scripts\install-picker.ps1
+```
+
+The script auto-publishes the picker if needed, copies the exe into the
+SimHub install dir, and creates the Start Menu shortcut. `-NoShortcut` to
+skip the shortcut, `-SimHubPath <dir>` for non-default SimHub installs.
 
 ---
 
