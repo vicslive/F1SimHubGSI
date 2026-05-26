@@ -49,7 +49,14 @@ namespace F1SimHubLive.F1Signalr
             _connection.Reconnected += () =>
             {
                 OnStatus?.Invoke("Reconnected");
-                _ = ResubscribeAsync();
+                // Fire-and-forget by design (Reconnected handler can't await), but
+                // attach a continuation so a truly unobserved exception still surfaces.
+                // ResubscribeAsync's own catch handles the normal Invoke-failed path.
+                _ = ResubscribeAsync().ContinueWith(t =>
+                {
+                    _log("unhandled in resubscribe: " + t.Exception?.GetBaseException().Message);
+                    OnStatus?.Invoke("ResubscribeFailed");
+                }, TaskContinuationOptions.OnlyOnFaulted);
             };
 
             try
@@ -88,6 +95,9 @@ namespace F1SimHubLive.F1Signalr
             catch (Exception ex)
             {
                 _log("subscribe failed: " + ex.Message);
+                // Surface to consumers — otherwise UI shows "Reconnected" while
+                // no telemetry actually flows (silent data loss after a blip).
+                OnStatus?.Invoke("ResubscribeFailed");
             }
         }
 

@@ -61,9 +61,10 @@ public sealed class UpdateChecker
             if (!TryParseSemverTag(tag, out var latest)) return null;
             if (latest <= current) return null;
 
-            var releasePageUrl = root.TryGetProperty("html_url", out var hu) && hu.ValueKind == JsonValueKind.String
-                ? hu.GetString() ?? ReleasesPageFallback
-                : ReleasesPageFallback;
+            var releasePageRaw = root.TryGetProperty("html_url", out var hu) && hu.ValueKind == JsonValueKind.String
+                ? hu.GetString()
+                : null;
+            var releasePageUrl = IsTrustedGitHubUrl(releasePageRaw) ? releasePageRaw! : ReleasesPageFallback;
 
             string? installerAssetUrl = null;
             if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
@@ -76,7 +77,11 @@ public sealed class UpdateChecker
                         asset.TryGetProperty("browser_download_url", out var url) &&
                         url.ValueKind == JsonValueKind.String)
                     {
-                        installerAssetUrl = url.GetString();
+                        var candidate = url.GetString();
+                        if (IsTrustedGitHubUrl(candidate))
+                        {
+                            installerAssetUrl = candidate;
+                        }
                         break;
                     }
                 }
@@ -109,10 +114,36 @@ public sealed class UpdateChecker
     /// <summary>
     /// URL to direct the user to if they choose "Download" on the update
     /// banner. Prefers a deep link to the .exe asset; falls back to the
-    /// release page.
+    /// release page. Both candidates are validated against the trusted-host
+    /// allow-list at the source (in <see cref="CheckAsync"/>); this method
+    /// re-validates as defense-in-depth before any <c>Process.Start</c>.
     /// </summary>
     public static string ResolveDownloadUrl(UpdateInfo info)
-        => info.InstallerAssetUrl ?? info.ReleasePageUrl;
+    {
+        if (IsTrustedGitHubUrl(info.InstallerAssetUrl)) return info.InstallerAssetUrl!;
+        if (IsTrustedGitHubUrl(info.ReleasePageUrl)) return info.ReleasePageUrl;
+        return ReleasesPageFallback;
+    }
+
+    /// <summary>
+    /// True if <paramref name="url"/> is an absolute https URL on the
+    /// github.com domain (including subdomains like
+    /// objects.githubusercontent.com). The installer launches URLs via
+    /// <c>ShellExecute</c> while running elevated, so a tampered or
+    /// rogue-host URL would be a real privilege-escalation vector — every
+    /// URL that reaches <c>Process.Start</c> must pass this gate.
+    /// </summary>
+    public static bool IsTrustedGitHubUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return false;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return false;
+        if (u.Scheme != Uri.UriSchemeHttps) return false;
+        var host = u.Host;
+        return host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".github.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("githubusercontent.com", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Reads the running installer's own version from its assembly. CI sets

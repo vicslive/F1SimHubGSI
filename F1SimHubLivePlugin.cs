@@ -30,7 +30,7 @@ namespace F1SimHubLive
         public void Init(PluginManager pluginManager)
         {
             PluginManager = pluginManager;
-            _settings = Settings.Load(SettingsPath());
+            _settings = Settings.Load(SettingsPath(), Log);
 
             Register("CurrentDriverNumber", _settings.DriverNumber);
             Register("DriverTla", "");
@@ -197,7 +197,13 @@ namespace F1SimHubLive
                 SetProp("TeamName", info.TeamName ?? "");
                 SetProp("TeamColour", info.TeamColour ?? "");
             };
-            _ = _client.StartAsync();
+            _ = _client.StartAsync().ContinueWith(t =>
+            {
+                if (t.Exception != null)
+                {
+                    Log("unhandled in StartAsync: " + t.Exception.GetBaseException().Message);
+                }
+            }, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
 
             Log($"started, source={_settings.Source}, target driver #{_settings.DriverNumber}, output {_settings.OutputHz} Hz, render delay {_settings.RenderDelayMs} ms");
         }
