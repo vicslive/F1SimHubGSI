@@ -71,11 +71,26 @@ public partial class MainWindow : Window
     private void BtnUpdateDownload_Click(object sender, RoutedEventArgs e)
     {
         if (_pendingUpdate == null) return;
+
+        // Defense-in-depth: UpdateChecker.ResolveDownloadUrl already validates,
+        // but we re-check at the last mile before ShellExecute. The installer
+        // runs elevated (app.manifest requestedExecutionLevel=requireAdministrator),
+        // so anything Process.Start launches inherits that token.
+        var url = UpdateChecker.ResolveDownloadUrl(_pendingUpdate);
+        if (!UpdateChecker.IsTrustedGitHubUrl(url))
+        {
+            MessageBox.Show(
+                "The update URL did not pass the trusted-host check and was not opened.\n\n" +
+                "Visit the releases page manually: https://github.com/vicslive/F1SimHubLive/releases/latest",
+                "F1SimHubLive Installer", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         try
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = UpdateChecker.ResolveDownloadUrl(_pendingUpdate),
+                FileName = url,
                 UseShellExecute = true,
             });
         }
