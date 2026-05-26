@@ -431,7 +431,36 @@ Hamilton crashes on lap 23. You want to flip the wheel to Antonelli without
 stopping SimHub, editing JSON, and sitting through MultiViewer's ~30-second
 warm-up after a restart. That's what the **F1SimHubLive Driver Picker** is for.
 
-![Driver Picker](docs/screenshots/picker.png)
+<!-- Screenshot to be added after the next release: docs/screenshots/picker.png -->
+
+### Visual layout
+
+```
+┌──────────────────────────────────┐
+│ F1SimHubLive — Driver Picker  ⌄ │
+├──────────────────────────────────┤
+│ ┌────┐ Lando NORRIS              │
+│ │NOR │ McLaren · 374 pts      4  │  ← team-coloured tile + name/team/points + race number
+│ └────┘                           │
+│ ┌────┐ Oscar PIASTRI             │
+│ │PIA │ McLaren · 356 pts     81  │  ← same team paired, ordered by points
+│ └────┘                           │
+│ ┌────┐ George RUSSELL            │
+│ │RUS │ Mercedes · 245 pts    63  │
+│ └────┘                           │
+│ ┌────┐ Kimi ANTONELLI            │
+│ │ANT │ Mercedes · 64 pts     12  │
+│ └────┘                           │
+│   …                              │
+│ ┌────┐ Lewis HAMILTON            │  ← currently active driver: coloured border
+│ │HAM │ Ferrari · 142 pts     44  │
+│ └────┘                           │
+└──────────────────────────────────┘
+```
+
+Click any driver tile. The row flashes green for 500ms. About one second later
+your wheel is showing that driver's RPM, gear, speed, lap, gap, sectors —
+without SimHub or MultiViewer being touched.
 
 ### What it does
 
@@ -578,21 +607,23 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy.ps1 -StartSimHub   # dep
   "Source": "F1Live",
   "MultiViewerBaseUrl": "http://localhost:10101",
   "MultiViewerPollMs": 250,
-  "MultiViewerTimingPollMs": 1000
+  "MultiViewerTimingPollMs": 1000,
+  "AutoLaunchPicker": false
 }
 ```
 
 | Key | Default | Meaning |
 |---|---|---|
-| `DriverNumber` | `"44"` | F1 racing number string. `44`=Hamilton, `1`=Verstappen, `16`=Leclerc, `81`=Piastri, `4`=Norris, `63`=Russell, `55`=Sainz, `14`=Alonso, `11`=Pérez, `18`=Stroll. |
+| `DriverNumber` | `"44"` | F1 racing number string. `44`=Hamilton, `1`=Verstappen, `16`=Leclerc, `81`=Piastri, `4`=Norris, `63`=Russell, `55`=Sainz, `14`=Alonso, `11`=Pérez, `18`=Stroll. **Hot-reloadable in v1.1.0+** — changing this value (via JSON edit or the Driver Picker) is picked up by the plugin within ~250ms without restarting SimHub. |
 | `OutputHz` | `60` | Interpolation tick rate for car telemetry. 60 is plenty for LEDs; higher just uses more CPU. |
 | `RenderDelayMs` | `200` | Render lag. Holds 200ms of buffer so the interpolator always has `prev` + `curr` snapshots to interpolate between. Lower = less added latency but more "hold" between samples. |
 | `Source` | `"F1Live"` | `F1Live` (broadcast SignalR) or `MultiViewer` (local replay). |
 | `MultiViewerBaseUrl` | `http://localhost:10101` | F1 MultiViewer HTTP API root. Only used when `Source=MultiViewer`. |
 | `MultiViewerPollMs` | `250` | Car-data polling interval against MultiViewer (4 Hz default). |
 | `MultiViewerTimingPollMs` | `1000` | Timing/session/weather polling interval against MultiViewer (1 Hz default). |
+| `AutoLaunchPicker` | `false` | When `true`, plugin spawns the [Driver Picker](#driver-picker-mid-race-driver-switching) every time SimHub starts. Off by default because the picker is admin-manifested and triggers a UAC prompt on each launch. Start Menu shortcut is the recommended manual-launch path. |
 
-Restart SimHub after editing.
+Hot-reloadable keys: **`DriverNumber` only.** All other keys still require a SimHub restart — changing URLs or polling intervals mid-session would require tearing down and re-establishing the client connection, and was intentionally left out of scope.
 
 ---
 
@@ -647,6 +678,20 @@ foreach ($p in 'Status','Rpm','Gear','Speed','Position','LapDisplay','TrackStatu
 **`Newtonsoft.Json` version conflict on SimHub startup:**
 - Remove `Newtonsoft.Json.dll` from `C:\Program Files (x86)\SimHub\` and use the one SimHub ships.
 
+**Driver Picker shows no drivers / "Waiting for MultiViewer...":**
+- The picker polls `http://localhost:10101/api/v1/live-timing/DriverList`. If MultiViewer isn't running or no session is loaded, the picker falls back to the bundled grid (last-known F1 25 lineup). To get the live grid, start MultiViewer with a session and **click "Replay Live Timing"** (same prerequisite as the plugin's MultiViewer source).
+- The picker polls every 5 seconds — give it that long after starting MV before assuming something's wrong.
+
+**Driver Picker shows drivers but they're in race-number order, not championship order:**
+- The championship sort needs `/api/v1/live-timing/ChampionshipPrediction`, which MultiViewer only populates during/after race sessions. During qualifying-only replays, or for a season-opening race weekend, this endpoint returns 404 and the picker falls back to race-number order. Not a bug — confirmation that the fallback is working.
+
+**Picker click doesn't flip the wheel / shows green flash but plugin doesn't react:**
+- Confirm `F1SimHubLive.Settings.json` actually changed (open it; check the new `DriverNumber` value). If the file didn't change, the picker hit a permission error — re-run it as admin (or use the Start Menu shortcut, which inherits the picker's `requireAdministrator` manifest).
+- If the file DID change but the plugin didn't react, check SimHub's plugin log for `[F1SimHubLivePlugin]` — the hot-reload writes a line like `Driver changed: 44 → 12`. No line = `FileSystemWatcher` didn't fire (rare, usually a path mismatch — verify the plugin and picker both point at the same `settings.json` under `C:\Program Files (x86)\SimHub\`).
+
+**Picker UAC prompt is annoying — can I turn it off?**
+- Not without recompiling the picker without the `requireAdministrator` manifest. The manifest is required because the picker writes to `settings.json` inside `Program Files (x86)\SimHub\`, which is admin-only. The cleanest "no UAC every launch" path is to leave `AutoLaunchPicker = false` (default) and accept one UAC per picker launch.
+
 ---
 
 ## File layout
@@ -684,25 +729,41 @@ foreach ($p in 'Status','Rpm','Gear','Speed','Position','LapDisplay','TrackStatu
     └── Interpolator.cs             # 60 Hz linear interpolation
 
 installer/                          # WPF installer wizard (.NET 8)
-├── F1SimHubLive.Installer.csproj    # Single-file publish config
+├── F1SimHubLive.Installer.csproj    # Single-file publish; chain-publishes the picker
 ├── App.xaml / App.xaml.cs
 ├── MainWindow.xaml / MainWindow.xaml.cs  # 4-step wizard UI
 ├── Models/                         # F1Driver, PrereqResult
 ├── Services/                       # PrereqChecker, DriverListService, Deployer
 └── Assets/                         # Embedded plugin DLL, dashboard, drivers-fallback.json
+                                    # (picker exe is also embedded at build time)
+
+picker/                             # Driver Picker — standalone WPF app (.NET 8)
+├── F1SimHubLive.Picker.csproj       # Single-file self-contained publish, admin manifest
+├── App.xaml / App.xaml.cs
+├── MainWindow.xaml / MainWindow.xaml.cs  # Always-on-top driver grid UI
+├── Models/
+│   └── DriverEntry.cs              # TLA / team colour / points view-model
+├── Services/
+│   ├── MultiViewerDriverListClient.cs  # /DriverList + /ChampionshipPrediction
+│   ├── SettingsFileWriter.cs       # Writes DriverNumber to plugin settings.json
+│   └── HexToBrushConverter.cs      # XAML helper
+├── Assets/
+│   └── picker.ico                  # Multi-res app icon
+└── app.manifest                    # requireAdministrator
 
 dashboards/                         # Source-of-truth Dash Studio templates
 └── F1RaceSim_GSIFPEV2/                      # Deployed by the installer to SimHub\DashTemplates\
 
 scripts/
-└── refresh-drivers.ps1             # Pull current grid from MultiViewer into drivers-fallback.json
+├── refresh-drivers.ps1             # Pull current grid from MultiViewer into drivers-fallback.json
+└── install-picker.ps1              # Local-only deploy of the picker (skips full installer rebuild)
 
 .github/workflows/
 └── release.yml                     # Tag-triggered build + (optional) Trusted Signing
 
 CHANGELOG.md                        # Version history
 DASHBOARD.md                        # Widget-level reference for F1RaceSim_GSIFPEV2.djson
-SIGNING.md                          # Code-signing options for the installer
+SIGNING.md                          # Code-signing options for the installer + picker
 LICENSE                             # MIT
 ```
 
@@ -711,6 +772,17 @@ Dashboard template lives in SimHub's install dir (not this repo):
 C:\Program Files (x86)\SimHub\DashTemplates\F1RaceSim_GSIFPEV2\
 ├── F1RaceSim_GSIFPEV2.djson                 # the dashboard definition
 └── (background images, tyre icons, F1 logos)
+```
+
+The Driver Picker exe ALSO lands in the SimHub install dir alongside the plugin DLL (so it can read/write the plugin's `settings.json` without hardcoding a path):
+```
+C:\Program Files (x86)\SimHub\F1SimHubLive-Picker.exe
+```
+
+And a Start Menu shortcut is created in the All-Users Start Menu:
+```
+C:\ProgramData\Microsoft\Windows\Start Menu\Programs\F1SimHubLive\
+└── F1SimHubLive Driver Picker.lnk
 ```
 
 ---

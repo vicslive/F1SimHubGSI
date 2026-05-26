@@ -1,8 +1,10 @@
-# Code signing the installer
+# Code signing the installer and Driver Picker
 
-The default `F1SimHubLive-Installer.exe` is unsigned. When end-users run it, Windows SmartScreen shows the familiar blue "Windows protected your PC" dialog and they have to click *More info → Run anyway*. That's safe, but it's a friction point — especially for non-technical users.
+The default `F1SimHubLive-Installer.exe` and `F1SimHubLive-Picker.exe` are unsigned. When end-users run them, Windows SmartScreen shows the familiar blue "Windows protected your PC" dialog and they have to click *More info → Run anyway*. That's safe, but it's a friction point — especially for non-technical users.
 
 This document captures the options to remove that warning, ranked by cost and resulting UX.
+
+> **v1.1.0+ note:** The repo now ships TWO executables that end users touch directly — the installer AND the Driver Picker (extracted from the installer to `C:\Program Files (x86)\SimHub\F1SimHubLive-Picker.exe` and launched from the Start Menu every race). Both should be signed once you set up any of the options below. They can share the **same certificate / Trusted Signing profile** — see [Signing both binaries](#signing-both-binaries) at the bottom of this doc.
 
 ---
 
@@ -217,3 +219,78 @@ Set up the federated credential in Entra once: App Registration → Certificates
 
 Grant the App Registration the **Trusted Signing Certificate Profile Signer** role on the Trusted Signing account.
 
+
+---
+
+## Signing both binaries
+
+> **Added in v1.1.0** — the repo now ships two end-user executables (installer + picker). This section covers signing both with one account.
+
+### Why both must be signed
+
+| Binary | Where it ends up | When does SmartScreen see it? |
+|---|---|---|
+| F1SimHubLive-Installer.exe | User Downloads folder | At install time, on first double-click |
+| F1SimHubLive-Picker.exe | `C:\Program Files (x86)\SimHub\F1SimHubLive-Picker.exe` (extracted by the installer) | Every time the user clicks the Start Menu shortcut to switch drivers |
+
+If only the installer is signed, the install completes cleanly — but then the very first time the user picks the Start Menu shortcut, SmartScreen will gate the picker because **the .exe blob inside the installer's embedded resource was unsigned at embed time**. Signing the installer wrapper does not retroactively sign the resource it carries.
+
+### Where the picker has to be signed
+
+The picker exe **must be signed BEFORE the installer embeds it**. The build order is:
+
+1. `dotnet publish picker/F1SimHubLive.Picker.csproj` → produces `picker/bin/Release/net8.0-windows/win-x64/publish/F1SimHubLive-Picker.exe`
+2. **Sign the picker exe** at the path above.
+3. `dotnet publish installer/F1SimHubLive.Installer.csproj` → the installer's `<PublishPicker>` MSBuild target sees the file already exists (`Condition="!Exists(...)"`), skips re-publishing, and embeds the SIGNED exe as the `F1SimHubLive-Picker.exe` resource.
+4. **Sign the installer exe** at `installer/publish/F1SimHubLive-Installer.exe`.
+5. End user downloads → installer is signed (no SmartScreen) → picker is extracted already-signed (no SmartScreen on Start Menu launch).
+
+### Same Trusted Signing account, no extra cost
+
+Trusted Signing bills **per signing account per month**, not per binary or per signature. The Basic SKU (~$10/mo) includes 5,000 signings/month — your two-binary release uses 2 of those. The same `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_TRUSTED_SIGNING_ENDPOINT`, `AZURE_TRUSTED_SIGNING_ACCOUNT`, and `AZURE_TRUSTED_SIGNING_PROFILE` secrets work for both binaries. The federated credential on your Entra App Registration covers both — Trusted Signing doesn't have per-binary scoping.
+
+### CI workflow change to support both
+
+In `.github/workflows/release.yml`, insert a picker publish + sign pair BEFORE the installer publish. The new steps mirror the existing `Sign installer` step but point at the picker's publish folder:
+
+```yaml
+- name: Publish picker
+  run: dotnet publish picker/F1SimHubLive.Picker.csproj -c Release --nologo
+
+- name: Sign picker with Trusted Signing
+  if: steps.signcheck.outputs.configured == 'true'
+  uses: azure/trusted-signing-action@v0.5.1
+  with:
+    endpoint: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+    trusted-signing-account-name: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT }}
+    certificate-profile-name: ${{ secrets.AZURE_TRUSTED_SIGNING_PROFILE }}
+    files-folder: picker/bin/Release/net8.0-windows/win-x64/publish
+    files-folder-filter: exe
+    file-digest: SHA256
+    timestamp-rfc3161: http://timestamp.acs.microsoft.com
+    timestamp-digest: SHA256
+
+# (existing) Publish installer — picks up the already-signed picker exe and embeds it
+- name: Publish installer
+  run: dotnet publish installer/F1SimHubLive.Installer.csproj -c Release --nologo
+
+# (existing) Sign installer
+- name: Sign installer with Trusted Signing
+  ...
+```
+
+Net change: 14 lines. No Azure-side change required.
+
+### Verifying the chain after signing
+
+After a signed release:
+
+```powershell
+# Installer:
+Get-AuthenticodeSignature 'F1SimHubLive-Installer.exe' | Format-List
+
+# Picker (after install):
+Get-AuthenticodeSignature 'C:\Program Files (x86)\SimHub\F1SimHubLive-Picker.exe' | Format-List
+```
+
+Both should show `Status: Valid` and `SignerCertificate.Subject: CN=Victor de Souza ...` (or whatever your verified Trusted Signing identity reads).

@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Dates in `YYYY-M
 
 ### Changed
 - Swapped hero and layout screenshot assignments: the data-rich mid-race shot (`docs/screenshots/GSIFPEV2-2.png`) is now the README/DASHBOARD hero, and the cleaner full-grid shot (`docs/screenshots/GSIFPEV2.png`) anchors the README layout section. Bigger visual impact at the top of the docs.
+- Documentation refresh for v1.1.0: README Configure section now lists `AutoLaunchPicker` and flags `DriverNumber` as the only hot-reloadable key; File layout includes the new `picker/` tree, `scripts/install-picker.ps1`, and Start Menu shortcut path; Troubleshooting gains four picker-specific entries (no drivers, race-number sort fallback, click-not-flipping, UAC pain); Driver Picker section replaces the missing PNG reference with an ASCII layout diagram so the doc still reads without an asset on disk. SIGNING.md gains a "Signing both binaries" section that covers picker-before-installer build ordering, same-account zero-incremental-cost billing, and the ~14-line CI workflow patch.
+- Installer wizard now hints under the driver dropdown that the choice is reversible at runtime via the Driver Picker — reduces first-install decision anxiety for new users.
+- `scripts/install-picker.ps1` always re-publishes the picker on each run (previous behaviour skipped publish if any picker exe already existed, which silently shipped stale binaries during iteration). Also fixed a `$env:ProgramFiles(x86)` interpolation bug that resolved to `C:\Program Files(x86)\SimHub` (no space) and broke the auto-detect on default installs.
+
+### Added
+- Picker now has a proper multi-resolution app icon (`picker/Assets/picker.ico` — 16/24/32/48/64/128/256 px). Renders in Explorer, taskbar, Window title bar, and Start Menu shortcut.
 
 ## [1.1.0] — 2026-05-26
 
