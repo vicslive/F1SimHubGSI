@@ -12,7 +12,7 @@ namespace F1SimHubLive.F1Signalr
         private const string HubUrl = "https://livetiming.formula1.com/signalr";
         private const string HubName = "Streaming";
 
-        private readonly string _driverNumber;
+        private volatile string _driverNumber;
         private readonly Action<string> _log;
         private HubConnection? _connection;
         private IHubProxy? _proxy;
@@ -138,6 +138,20 @@ namespace F1SimHubLive.F1Signalr
             _driverInfoEmitted = true;
             _log($"DriverList resolved #{_driverNumber}: {info.Tla} {info.BroadcastName} ({info.TeamName})");
             OnDriverInfoSnapshot?.Invoke(info);
+        }
+
+        public void SetDriverNumber(string driverNumber)
+        {
+            if (string.IsNullOrWhiteSpace(driverNumber)) return;
+            string normalized = driverNumber.Trim();
+            if (normalized == _driverNumber) return;
+            string previous = _driverNumber;
+            _driverNumber = normalized;
+            // The SignalR subscription is broadcast (all drivers). On the next
+            // CarData feed message we'll filter to the new number. Reset the
+            // DriverInfo gate so the new driver's identity is re-resolved.
+            _driverInfoEmitted = false;
+            _log($"driver switch {previous} -> {normalized}");
         }
 
         public void Dispose()

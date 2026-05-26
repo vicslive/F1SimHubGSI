@@ -27,6 +27,10 @@ namespace F1SimHubLive
         private double _topSpeedSeen;
         private int _topSpeedSessionKey;
 
+        private FileSystemWatcher? _settingsWatcher;
+        private System.Threading.Timer? _settingsReloadDebounce;
+        private readonly object _settingsReloadLock = new();
+
         public void Init(PluginManager pluginManager)
         {
             PluginManager = pluginManager;
@@ -205,7 +209,126 @@ namespace F1SimHubLive
                 }
             }, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
 
+            StartSettingsWatcher();
+            MaybeLaunchPicker();
+
             Log($"started, source={_settings.Source}, target driver #{_settings.DriverNumber}, output {_settings.OutputHz} Hz, render delay {_settings.RenderDelayMs} ms");
+        }
+
+        // ----- Settings hot-reload (driver picker support) ----------------------
+        // Watches F1SimHubLive.Settings.json and live-swaps the watched driver
+        // when DriverNumber changes. Other fields (Source / URLs / poll cadence)
+        // are deliberately ignored mid-session: they're load-bearing on the
+        // client lifecycle and should require a full restart. Driver number is
+        // the one field that can flip safely on the fly.
+
+        private void StartSettingsWatcher()
+        {
+            try
+            {
+                string path = SettingsPath();
+                string dir = Path.GetDirectoryName(path) ?? ".";
+                string file = Path.GetFileName(path);
+                _settingsWatcher = new FileSystemWatcher(dir, file)
+                {
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                    EnableRaisingEvents = true,
+                };
+                _settingsWatcher.Changed += (_, __) => ScheduleSettingsReload();
+                _settingsWatcher.Created += (_, __) => ScheduleSettingsReload();
+                _settingsWatcher.Renamed += (_, __) => ScheduleSettingsReload();
+                Log($"watching settings file for live driver swaps: {path}");
+            }
+            catch (Exception ex)
+            {
+                Log($"settings watcher failed to start ({ex.Message}); driver swaps will require SimHub restart");
+            }
+        }
+
+        private void ScheduleSettingsReload()
+        {
+            // FileSystemWatcher fires multiple events per save (LastWrite + Size +
+            // sometimes a rename from a temp file). Debounce so we reload once.
+            _settingsReloadDebounce?.Dispose();
+            _settingsReloadDebounce = new System.Threading.Timer(
+                _ => TryReloadSettings(), null, 250, System.Threading.Timeout.Infinite);
+        }
+
+        private void TryReloadSettings()
+        {
+            lock (_settingsReloadLock)
+            {
+                try
+                {
+                    var fresh = Settings.Load(SettingsPath(), Log);
+                    if (!string.IsNullOrWhiteSpace(fresh.DriverNumber)
+                        && fresh.DriverNumber != _settings.DriverNumber)
+                    {
+                        string previous = _settings.DriverNumber;
+                        _settings.DriverNumber = fresh.DriverNumber;
+                        _topSpeedSeen = 0.0;
+                        _topSpeedSessionKey = 0;
+                        SetProp("CurrentDriverNumber", fresh.DriverNumber);
+                        // Clear stale identity props so the dash doesn't keep
+                        // showing the old driver's TLA / team while the new one
+                        // resolves on the next DriverList poll.
+                        SetProp("DriverTla", "");
+                        SetProp("DriverFirstName", "");
+                        SetProp("DriverLastName", "");
+                        SetProp("DriverFullName", "");
+                        SetProp("DriverBroadcastName", "");
+                        SetProp("TeamName", "");
+                        SetProp("TeamColour", "");
+                        SetProp("TopSpeed", "");
+                        _client?.SetDriverNumber(fresh.DriverNumber);
+                        Log($"live driver swap: {previous} -> {fresh.DriverNumber}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"settings reload failed: {ex.Message}");
+                }
+            }
+        }
+
+        // ----- Picker auto-launch (opt-in) --------------------------------------
+        // Spawns F1SimHubLive-Picker.exe if AutoLaunchPicker is true and the exe
+        // sits next to the plugin DLL. Best-effort — failures are logged but
+        // never block SimHub startup. The Start Menu shortcut created by the
+        // installer is the recommended manual-launch path; this is just for
+        // users who always run SimHub elevated and want the picker every time.
+        private void MaybeLaunchPicker()
+        {
+            if (!_settings.AutoLaunchPicker) return;
+            try
+            {
+                string dllDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".";
+                string exe = Path.Combine(dllDir, "F1SimHubLive-Picker.exe");
+                if (!File.Exists(exe))
+                {
+                    Log($"AutoLaunchPicker is on but {exe} does not exist; skipping. " +
+                        "Re-run the installer to deploy the picker.");
+                    return;
+                }
+                // Don't double-launch if the user already has the picker open
+                // (e.g. SimHub was restarted while picker stayed alive).
+                if (System.Diagnostics.Process.GetProcessesByName("F1SimHubLive-Picker").Length > 0)
+                {
+                    Log("picker already running; not spawning a duplicate");
+                    return;
+                }
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = exe,
+                    WorkingDirectory = dllDir,
+                    UseShellExecute = true, // honour the requireAdministrator manifest
+                });
+                Log($"launched driver picker: {exe}");
+            }
+            catch (Exception ex)
+            {
+                Log($"picker auto-launch failed: {ex.Message}");
+            }
         }
 
         private ITelemetrySource CreateClient()
@@ -275,6 +398,8 @@ namespace F1SimHubLive
 
         public void End(PluginManager pluginManager)
         {
+            _settingsWatcher?.Dispose();
+            _settingsReloadDebounce?.Dispose();
             _interp?.Dispose();
             _client?.Dispose();
         }

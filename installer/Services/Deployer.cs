@@ -18,6 +18,21 @@ public sealed class DeployOptions
     public bool RestartSimHub { get; init; } = true;
 
     /// <summary>
+    /// When true, the deployer extracts F1SimHubLive-Picker.exe next to the plugin
+    /// DLL and creates a Start Menu shortcut so the user can launch the driver
+    /// picker with one click during a race.
+    /// </summary>
+    public bool InstallPicker { get; init; } = true;
+
+    /// <summary>
+    /// Written to settings.json as <c>AutoLaunchPicker</c>. The plugin reads this
+    /// at Init and spawns the picker on every SimHub start when true. Off by
+    /// default because the picker requests administrator rights and would
+    /// trigger a UAC prompt for users who don't run SimHub elevated.
+    /// </summary>
+    public bool AutoLaunchPicker { get; init; } = false;
+
+    /// <summary>
     /// When true, the deployer flips every SimHub device's
     /// <c>CurrentIdleDashboard</c> to F1RaceSim_GSIFPEV2 (with a timestamped backup).
     /// When false, the deployer leaves the user's idle dashboard alone and the
@@ -68,6 +83,22 @@ public sealed class Deployer
         ExtractResourceTo("Microsoft.AspNet.SignalR.Client.dll", Path.Combine(opts.SimHubInstallDir, "Microsoft.AspNet.SignalR.Client.dll"));
         ReportNewlyInstalledPluginVersion(pluginDest);
         P(40);
+
+        if (opts.InstallPicker)
+        {
+            L("Copying Driver Picker...");
+            string pickerDest = Path.Combine(opts.SimHubInstallDir, "F1SimHubLive-Picker.exe");
+            TryExtractResourceTo("F1SimHubLive-Picker.exe", pickerDest);
+            if (File.Exists(pickerDest))
+            {
+                CreatePickerShortcut(pickerDest);
+            }
+        }
+        else
+        {
+            L("Driver Picker install skipped (user opted out).");
+        }
+        P(50);
 
         L("Copying F1RaceSim_GSIFPEV2 dashboard files...");
         ExtractResourceTo("F1RaceSim_GSIFPEV2.djson", Path.Combine(dashDir, "F1RaceSim_GSIFPEV2.djson"));
@@ -175,9 +206,54 @@ public sealed class Deployer
             MultiViewerBaseUrl = opts.MultiViewerBaseUrl,
             MultiViewerPollMs = opts.MultiViewerPollMs,
             MultiViewerTimingPollMs = opts.MultiViewerTimingPollMs,
+            AutoLaunchPicker = opts.AutoLaunchPicker,
         };
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(Path.Combine(opts.SimHubInstallDir, "F1SimHubLive.Settings.json"), json, new UTF8Encoding(false));
+    }
+
+    /// <summary>
+    /// Creates an All-Users Start Menu shortcut (.lnk) pointing at the deployed
+    /// Driver Picker exe. Best-effort — failures are logged but never block the
+    /// install. Uses WScript.Shell COM via reflection so we don't take a
+    /// dependency on IWshRuntimeLibrary just for this.
+    /// </summary>
+    private void CreatePickerShortcut(string pickerExePath)
+    {
+        try
+        {
+            string commonStart = Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu);
+            string folder = Path.Combine(commonStart, "Programs", "F1SimHubLive");
+            Directory.CreateDirectory(folder);
+            string shortcut = Path.Combine(folder, "F1SimHubLive Driver Picker.lnk");
+
+            var t = Type.GetTypeFromProgID("WScript.Shell");
+            if (t == null)
+            {
+                L("Could not create Start Menu shortcut: WScript.Shell unavailable.");
+                return;
+            }
+            dynamic shell = Activator.CreateInstance(t)!;
+            try
+            {
+                dynamic sc = shell.CreateShortcut(shortcut);
+                sc.TargetPath = pickerExePath;
+                sc.WorkingDirectory = Path.GetDirectoryName(pickerExePath) ?? "";
+                sc.IconLocation = pickerExePath + ",0";
+                sc.Description = "Switch the watched F1 driver live for F1SimHubLive";
+                sc.WindowStyle = 1;
+                sc.Save();
+                L($"Created Start Menu shortcut: {shortcut}");
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+            }
+        }
+        catch (Exception ex)
+        {
+            L($"Start Menu shortcut creation failed (non-fatal): {ex.Message}");
+        }
     }
 
     private void ReportExistingPluginVersion(string pluginPath)
@@ -222,5 +298,35 @@ public sealed class Deployer
         using var src = asm.GetManifestResourceStream(resName)!;
         using var dst = File.Create(destPath);
         src.CopyTo(dst);
+    }
+
+    /// <summary>
+    /// Same as <see cref="ExtractResourceTo"/> but logs and returns false on
+    /// missing-resource instead of throwing. Used for optional payloads (the
+    /// Driver Picker) so the installer remains usable even on a build where
+    /// the picker publish step was skipped.
+    /// </summary>
+    private bool TryExtractResourceTo(string assetName, string destPath)
+    {
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            var resName = asm.GetManifestResourceNames()
+                .FirstOrDefault(n => n.EndsWith(assetName, StringComparison.OrdinalIgnoreCase));
+            if (resName == null)
+            {
+                L($"Optional resource '{assetName}' is not embedded in this installer build; skipping.");
+                return false;
+            }
+            using var src = asm.GetManifestResourceStream(resName)!;
+            using var dst = File.Create(destPath);
+            src.CopyTo(dst);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            L($"Could not extract '{assetName}' to '{destPath}': {ex.Message}");
+            return false;
+        }
     }
 }
